@@ -14,7 +14,7 @@ Audit code for **correctness and rigor**. This is not a style review — it's a 
 
 Scope comes from `$ARGUMENTS`:
 
-- `branch` (default when `$ARGUMENTS` is empty) — audit only changes in the current branch/PR. Use `git diff main...HEAD` (or the appropriate base branch) to identify changed files and limit all subsequent steps to those files.
+- `branch` (default when `$ARGUMENTS` is empty) — audit only changes in the current branch/PR/current change. Use `.apm/skills/do/scripts/vcs current-files` when available (or the generated equivalent under `.agents/skills/do/scripts/vcs`) to identify changed files and limit all subsequent steps to those files. Fall back to `git diff main...HEAD` only when the helper is unavailable.
 - `all` — audit the whole codebase.
 - Anything else — treat the argument as the target itself (a file path, a diff range like `origin/main...HEAD`, or inline text/output to audit, e.g. when invoked by `hickey` to audit its own evaluation). Limit the audit to that target.
 

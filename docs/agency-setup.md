@@ -8,7 +8,7 @@ Don't commit anything — leave changes staged for the user to review.
 
 ## Invariant: `apm install` and `apm compile` run *after* every file change
 
-`apm install -t <subset>` regenerates the host folders (`.claude/`, `.opencode/`, `.codex/`) from `apm.yml` plus the contents of `.apm/`, and `apm compile -t <subset>` produces the project-root `AGENTS.md` for Codex / opencode from the same inputs. **Any** change to `apm.yml` or anything under `.apm/` invalidates both outputs. So this guide makes all file changes first (steps 1–7) and runs `apm install` (and `apm compile` where needed) exactly once at the end (step 8). Don't run install or compile partway through — later steps may add or modify files that must land in the same regeneration. If you ever edit `apm.yml` or `.apm/*` outside the prescribed order, you must re-run both before reporting back.
+`apm install -t <subset>` regenerates the host folders (`.agents/`, `.claude/`, `.opencode/`, `.codex/`) from `apm.yml` plus the contents of `.apm/`, and `apm compile -t <subset>` produces the project-root `AGENTS.md` for Codex / opencode from the same inputs. **Any** change to `apm.yml` or anything under `.apm/` invalidates both outputs. So this guide makes all file changes first (steps 1–7) and runs `apm install` (and `apm compile` where needed) exactly once at the end (step 8). Don't run install or compile partway through — later steps may add or modify files that must land in the same regeneration. If you ever edit `apm.yml` or `.apm/*` outside the prescribed order, you must re-run both before reporting back.
 
 ## 1. Pick an `apm` invocation
 
@@ -60,9 +60,9 @@ If `apm.yml` already exists, edit it idempotently:
 
 Don't touch unrelated entries. Refreshing an existing `srid/agency` pin is handled by `apm deps update` in step 8 — don't hand-edit the ref here.
 
-## 4. Ensure `.gitignore` covers agency runtime artifacts
+## 4. Ensure ignore files cover agency runtime artifacts
 
-`apm install` (which runs in step 8) will add `apm_modules/` for you, but `do` writes `.do-results.json` at the repo root during a workflow run and that should not be committed. Make sure both lines exist in `.gitignore` (create the file if missing), idempotently — don't duplicate entries that are already there:
+`apm install` (which runs in step 8) will add `apm_modules/` for you, but `do` writes `.do-results.json` at the repo root during a workflow run and that should not be committed. Make sure both lines exist in `.gitignore` (create the file if missing), idempotently — don't duplicate entries that are already there. Jujutsu honors `.gitignore` natively, so this same file is still the right place for these runtime artifacts:
 
 - `/.do-results.json`
 - `/apm_modules/` (verify; `apm install` may already have added it as `apm_modules/` — either form is fine)

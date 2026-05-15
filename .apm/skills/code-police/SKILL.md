@@ -86,6 +86,8 @@ Pass 3 runs **after** Pass 1 and Pass 2 return. It applies fixes (via `/simplify
 
 Once all three pass outputs are in hand, stitch them into the summary table in the **Output** section.
 
+**VCS helper** below means `.apm/skills/do/scripts/vcs` when running from source, or the generated equivalent under `.agents/skills/do/scripts/vcs` in an installed project. Fall back to Git commands only when neither helper path exists.
+
 ### Pass 1: Rule checklist
 
 Sub-agent prompt:
@@ -94,7 +96,7 @@ Sub-agent prompt:
 >
 > Read the "Reviewing principles" and "Rules" sections of `.apm/skills/code-police/SKILL.md` for the built-in rule set. Also read `.agency/code-police.md` if it exists — its rules are additions to the built-in list (separate rows in the table, project-chosen rule IDs).
 >
-> **Scope:** the current diff against the merge base — run `git diff origin/HEAD...HEAD` (or the appropriate base-branch ref if `origin/HEAD` is unset).
+> **Scope:** the current diff against the merge base/current change — run the VCS helper's `current-diff` command. Fall back to `git diff origin/HEAD...HEAD` only when the helper is unavailable.
 >
 > Produce a single table with **every rule** (built-in + project):
 >
@@ -118,7 +120,7 @@ Sub-agent prompt:
 >
 > Read the "Reviewing principles" section of `.apm/skills/code-police/SKILL.md` and apply them verbatim. This is **not** a style review — it is a logic review. Find places where the code lies to itself.
 >
-> **Scope:** the current diff against the merge base — run `git diff origin/HEAD...HEAD` (or the appropriate base-branch ref if `origin/HEAD` is unset).
+> **Scope:** the current diff against the merge base/current change — run the VCS helper's `current-diff` command. Fall back to `git diff origin/HEAD...HEAD` only when the helper is unavailable.
 >
 > Flag:
 >
@@ -138,7 +140,7 @@ Sub-agent prompt:
 
 ### Pass 3: Elegance
 
-**Skip on tiny diffs.** Run `git diff origin/HEAD...HEAD --shortstat` (or the appropriate base-branch ref). If the diff is **under 10 lines**, skip this pass and report `Elegance | 0 | Skipped (tiny diff)` in the summary. The elegance pass's three-lens fan-out has overhead that's disproportionate to a few-line change; Pass 1 and Pass 2 still run. If the diff exceeds the threshold, proceed below.
+**Skip on tiny diffs.** Run the VCS helper's `shortstat` command. Fall back to `git diff origin/HEAD...HEAD --shortstat` only when the helper is unavailable. If the diff is **under 10 lines**, skip this pass and report `Elegance | 0 | Skipped (tiny diff)` in the summary. The elegance pass's three-lens fan-out has overhead that's disproportionate to a few-line change; Pass 1 and Pass 2 still run. If the diff exceeds the threshold, proceed below.
 
 Review the changes for elegance and simplicity.
 

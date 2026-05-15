@@ -1,0 +1,233 @@
+#!/usr/bin/env bash
+# Shared read-only VCS helper for Agency workflows.
+#
+# Commands:
+#   detect          -> git|jj|none
+#   remote-url      -> origin remote URL when available
+#   forge           -> github|bitbucket|unknown
+#   default-ref     -> default base ref/bookmark name
+#   review-label    -> branch name, jj change id, or none
+#   head-id         -> immutable commit/revision id when available
+#   current-diff    -> diff for the current Agency change scope
+#   current-files   -> paths changed in the current Agency change scope
+#   shortstat       -> compact size summary for the current Agency change scope
+#   status          -> machine/human-readable local status
+#   supports <cap>  -> true|false for branch, commit, push, or pr support
+#   unsupported-reason <cap>
+#                  -> skip reason for an unsupported capability
+
+set -euo pipefail
+
+cmd="${1:?Usage: vcs <command> [args]}"
+
+detect_vcs() {
+  if command -v jj >/dev/null 2>&1 && jj root >/dev/null 2>&1; then
+    echo jj
+  elif git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    echo git
+  else
+    echo none
+  fi
+}
+
+git_base_ref() {
+  if git rev-parse --verify --quiet refs/remotes/origin/HEAD >/dev/null; then
+    echo origin/HEAD
+  elif git rev-parse --verify --quiet origin/master >/dev/null; then
+    echo origin/master
+  elif git rev-parse --verify --quiet origin/main >/dev/null; then
+    echo origin/main
+  elif git rev-parse --verify --quiet master >/dev/null; then
+    echo master
+  elif git rev-parse --verify --quiet main >/dev/null; then
+    echo main
+  else
+    echo HEAD
+  fi
+}
+
+git_default_ref() {
+  git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's|^origin/||' || echo master
+}
+
+git_remote_url() {
+  # A repo can have no origin yet; forge detection treats that as unknown.
+  if ! git remote get-url origin 2>/dev/null; then
+    return 0
+  fi
+}
+
+git_untracked_files() {
+  git ls-files --others --exclude-standard
+}
+
+git_diff_untracked() {
+  git_untracked_files | while IFS= read -r file; do
+    set +e
+    git diff --no-index -- /dev/null "$file"
+    status="$?"
+    set -e
+    if [ "$status" -ne 0 ] && [ "$status" -ne 1 ]; then
+      exit "$status"
+    fi
+  done
+}
+
+git_shortstat_untracked() {
+  git_untracked_files | while IFS= read -r file; do
+    set +e
+    git diff --no-index --shortstat -- /dev/null "$file"
+    status="$?"
+    set -e
+    if [ "$status" -ne 0 ] && [ "$status" -ne 1 ]; then
+      exit "$status"
+    fi
+  done
+}
+
+jj_default_ref() {
+  if jj show main >/dev/null 2>&1; then
+    echo main
+  elif jj show master >/dev/null 2>&1; then
+    echo master
+  else
+    echo @-
+  fi
+}
+
+jj_remote_url() {
+  jj git remote list 2>/dev/null | while IFS= read -r line; do
+    set -- $line
+    case "${1:-}" in
+      origin)
+        echo "${2:-}"
+        break
+        ;;
+    esac
+  done
+}
+
+no_current_change() {
+  echo "vcs: no supported VCS detected; cannot compute current change" >&2
+  exit 1
+}
+
+classify_forge() {
+  case "$1" in
+    *github.com*) echo github ;;
+    *bitbucket.*) echo bitbucket ;;
+    *) echo unknown ;;
+  esac
+}
+
+capability_status() {
+  capability="$1"
+  case "$vcs:$capability" in
+    git:branch|git:commit|git:push|git:pr) echo "true|" ;;
+    jj:branch) echo "false|jj phase1: branch unsupported" ;;
+    jj:commit) echo "false|jj phase1: commit unsupported" ;;
+    jj:push) echo "false|jj phase1: push unsupported" ;;
+    jj:pr) echo "false|jj phase1: pr unsupported" ;;
+    none:branch|none:commit|none:push|none:pr) echo "false|no supported VCS detected" ;;
+    *) echo "Unknown capability: $capability" >&2; exit 2 ;;
+  esac
+}
+
+vcs="$(detect_vcs)"
+
+case "$cmd" in
+  detect)
+    echo "$vcs"
+    ;;
+  remote-url)
+    case "$vcs" in
+      git) git_remote_url ;;
+      jj) jj_remote_url ;;
+      none) ;;
+    esac
+    ;;
+  forge)
+    url="$($0 remote-url)"
+    classify_forge "$url"
+    ;;
+  default-ref)
+    case "$vcs" in
+      git) git_default_ref ;;
+      jj) jj_default_ref ;;
+      none) echo none ;;
+    esac
+    ;;
+  review-label)
+    case "$vcs" in
+      git) git rev-parse --abbrev-ref HEAD ;;
+      jj) jj log -r @ --no-graph -T 'change_id.short() ++ "\n"' ;;
+      none) echo none ;;
+    esac
+    ;;
+  head-id)
+    case "$vcs" in
+      git) git rev-parse HEAD ;;
+      jj) jj log -r @ --no-graph -T 'commit_id.short() ++ "\n"' ;;
+      none) echo none ;;
+    esac
+    ;;
+  supports)
+    capability="${2:?Usage: vcs supports <branch|commit|push|pr>}"
+    status="$(capability_status "$capability")"
+    echo "${status%%|*}"
+    ;;
+  unsupported-reason)
+    capability="${2:?Usage: vcs unsupported-reason <branch|commit|push|pr>}"
+    status="$(capability_status "$capability")"
+    echo "${status#*|}"
+    ;;
+  current-diff)
+    case "$vcs" in
+      git)
+        git diff "$(git_base_ref)...HEAD"
+        git diff --cached
+        git diff
+        git_diff_untracked
+        ;;
+      jj) jj diff --git ;;
+      none) no_current_change ;;
+    esac
+    ;;
+  current-files)
+    case "$vcs" in
+      git)
+        {
+          git diff --name-only "$(git_base_ref)...HEAD"
+          git diff --cached --name-only
+          git diff --name-only
+          git_untracked_files
+        } | sort -u
+        ;;
+      jj) jj diff --name-only ;;
+      none) no_current_change ;;
+    esac
+    ;;
+  shortstat)
+    case "$vcs" in
+      git)
+        git diff --shortstat "$(git_base_ref)...HEAD"
+        git diff --cached --shortstat
+        git diff --shortstat
+        git_shortstat_untracked
+        ;;
+      jj) jj diff --stat ;;
+      none) no_current_change ;;
+    esac
+    ;;
+  status)
+    case "$vcs" in
+      git) git status --porcelain ;;
+      jj) jj status ;;
+      none) echo "No supported VCS detected" ;;
+    esac
+    ;;
+  *)
+    echo "Unknown command: $cmd" >&2
+    exit 2
+    ;;
+esac

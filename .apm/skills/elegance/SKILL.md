@@ -12,7 +12,7 @@ Run for **3 iterations** (or as specified by the user — can be a number or a d
 ## 0. Determine Scope
 
 - Before starting, use the `AskUserQuestion` tool to ask: should this operate on the **whole codebase** or only on **changes in the current branch/PR**?
-- If scoped to current branch/PR, use `git diff main...HEAD` (or the appropriate base branch) to identify changed files and limit all subsequent steps to those files only.
+- If scoped to current branch/PR/current change, use `.apm/skills/do/scripts/vcs current-files` when available (or the generated equivalent under `.agents/skills/do/scripts/vcs`) to identify changed files and limit all subsequent steps to those files only. Fall back to `git diff main...HEAD` only when the helper is unavailable.
 
 ## For each iteration (1 to N):
 
