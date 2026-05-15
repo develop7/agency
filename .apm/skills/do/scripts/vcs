@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Shared read-only VCS helper for Agency workflows.
+# Shared VCS helper for Agency workflows.
 #
 # Commands:
 #   detect          -> git|jj|none
 #   remote-url      -> origin remote URL when available
 #   forge           -> github|bitbucket|unknown
 #   default-ref     -> default base ref/bookmark name
-#   review-label    -> branch name, jj change id, or none
+#   review-label    -> branch name, jj bookmark, or none
 #   head-id         -> immutable commit/revision id when available
 #   current-diff    -> diff for the current Agency change scope
 #   current-files   -> paths changed in the current Agency change scope
@@ -15,6 +15,17 @@
 #   supports <cap>  -> true|false for branch, commit, push, or pr support
 #   unsupported-reason <cap>
 #                  -> skip reason for an unsupported capability
+#   branch-start <name>
+#                  -> create/switch to feature branch (git) or position
+#                     working copy on default ref (jj)
+#   commit-push <message> <label>
+#                  -> commit and push (git) or commit, create bookmark,
+#                     track, and push (jj)
+#   fix-commit <message> <label>
+#                  -> commit a fix and advance branch/bookmark
+#
+# Mutating commands (branch-start, commit-push, fix-commit) are
+# backend-encapsulated so the orchestrator (SKILL.md) can stay generic.
 
 set -euo pipefail
 
@@ -29,6 +40,8 @@ detect_vcs() {
     echo none
   fi
 }
+
+# ── Git backend ──────────────────────────────────────────────────
 
 git_base_ref() {
   if git rev-parse --verify --quiet refs/remotes/origin/HEAD >/dev/null; then
@@ -51,10 +64,17 @@ git_default_ref() {
 }
 
 git_remote_url() {
-  # A repo can have no origin yet; forge detection treats that as unknown.
   if ! git remote get-url origin 2>/dev/null; then
     return 0
   fi
+}
+
+git_review_label() {
+  git rev-parse --abbrev-ref HEAD
+}
+
+git_head_id() {
+  git rev-parse HEAD
 }
 
 git_untracked_files() {
@@ -85,11 +105,67 @@ git_shortstat_untracked() {
   done
 }
 
+git_current_diff() {
+  git diff "$(git_base_ref)...HEAD"
+  git diff --cached
+  git diff
+  git_diff_untracked
+}
+
+git_current_files() {
+  {
+    git diff --name-only "$(git_base_ref)...HEAD"
+    git diff --cached --name-only
+    git diff --name-only
+    git_untracked_files
+  } | sort -u
+}
+
+git_shortstat() {
+  git diff --shortstat "$(git_base_ref)...HEAD"
+  git diff --cached --shortstat
+  git diff --shortstat
+  git_shortstat_untracked
+}
+
+git_status() {
+  git status --porcelain
+}
+
+git_branch_start() {
+  local name="$1"
+  if [ -z "$name" ]; then echo "Usage: vcs branch-start <name>" >&2; exit 2; fi
+  local default_ref
+  default_ref="$(git_default_ref)"
+  git checkout -b "$name" "origin/$default_ref"
+}
+
+git_commit_push() {
+  local msg="$1" label="$2"
+  if [ -z "$msg" ] || [ -z "$label" ]; then echo "Usage: vcs commit-push <message> <label>" >&2; exit 2; fi
+  git commit -m "$msg"
+  git push -u origin "$label"
+}
+
+git_fix_commit() {
+  local msg="$1" label="$2"
+  if [ -z "$msg" ] || [ -z "$label" ]; then echo "Usage: vcs fix-commit <message> <label>" >&2; exit 2; fi
+  git add -A
+  git commit -m "$msg"
+  git push
+}
+
+# ── Jujutsu backend ──────────────────────────────────────────────
+
 jj_default_ref() {
   if jj show main >/dev/null 2>&1; then
     echo main
   elif jj show master >/dev/null 2>&1; then
     echo master
+  elif jj show main@origin >/dev/null 2>&1; then
+    echo main@origin
+  elif jj show master@origin >/dev/null 2>&1; then
+    echo master@origin
   else
     echo @-
   fi
@@ -106,6 +182,80 @@ jj_remote_url() {
     esac
   done
 }
+
+jj_review_label() {
+  local label
+  label="$(
+    { jj log -r @ --no-graph -T 'bookmarks ++ "\n"' 2>/dev/null
+      jj log -r @- --no-graph -T 'bookmarks ++ "\n"' 2>/dev/null
+    } | grep -v '^$' | head -n1
+  )"
+  if [ -n "$label" ]; then
+    echo "$label"
+  else
+    jj log -r @ --no-graph -T 'change_id.short() ++ "\n"' 2>/dev/null
+  fi
+}
+
+jj_head_id() {
+  jj log -r @ --no-graph -T 'commit_id.short() ++ "\n"'
+}
+
+jj_current_diff() {
+  jj diff --git
+}
+
+jj_current_files() {
+  jj diff --name-only
+}
+
+jj_shortstat() {
+  jj diff --stat
+}
+
+jj_status() {
+  jj status
+}
+
+jj_branch_start() {
+  local default_ref
+  default_ref="$(jj_default_ref)"
+  jj new "$default_ref"
+}
+
+jj_commit_push() {
+  local msg="$1" label="$2"
+  if [ -z "$msg" ] || [ -z "$label" ]; then echo "Usage: vcs commit-push <message> <label>" >&2; exit 2; fi
+  jj commit -m "$msg"
+  jj bookmark create "$label" -r @-
+  jj bookmark track "$label"
+  jj git push --bookmark "$label"
+}
+
+jj_fix_commit() {
+  local msg="$1" label="$2"
+  if [ -z "$msg" ] || [ -z "$label" ]; then echo "Usage: vcs fix-commit <message> <label>" >&2; exit 2; fi
+  jj new "$label"
+  # apply fix
+  jj commit -m "$msg"
+  jj bookmark move "$label" --to @-
+  jj git push --bookmark "$label"
+}
+
+# ── None backend ─────────────────────────────────────────────────
+
+none_default_ref() { echo none; }
+none_review_label() { echo none; }
+none_head_id()     { echo none; }
+none_current_diff()     { no_current_change; }
+none_current_files()    { no_current_change; }
+none_shortstat()        { no_current_change; }
+none_status()           { echo "No supported VCS detected"; }
+none_branch_start()     { echo "vcs: no supported VCS detected; cannot start branch" >&2; exit 1; }
+none_commit_push()      { echo "vcs: no supported VCS detected; cannot commit" >&2; exit 1; }
+none_fix_commit()       { echo "vcs: no supported VCS detected; cannot commit" >&2; exit 1; }
+
+# ── Shared helpers ───────────────────────────────────────────────
 
 no_current_change() {
   echo "vcs: no supported VCS detected; cannot compute current change" >&2
@@ -124,52 +274,41 @@ capability_status() {
   capability="$1"
   case "$vcs:$capability" in
     git:branch|git:commit|git:push|git:pr) echo "true|" ;;
-    jj:branch) echo "false|jj phase1: branch unsupported" ;;
-    jj:commit) echo "false|jj phase1: commit unsupported" ;;
-    jj:push) echo "false|jj phase1: push unsupported" ;;
-    jj:pr) echo "false|jj phase1: pr unsupported" ;;
+    jj:branch|jj:commit|jj:push|jj:pr) echo "true|" ;;
     none:branch|none:commit|none:push|none:pr) echo "false|no supported VCS detected" ;;
     *) echo "Unknown capability: $capability" >&2; exit 2 ;;
   esac
 }
 
+# ── Top-level dispatch ───────────────────────────────────────────
+
 vcs="$(detect_vcs)"
+
+handler() {
+  local backend="$1" cmd="$2"
+  shift 2
+  "${backend}_${cmd}" "$@"
+}
 
 case "$cmd" in
   detect)
     echo "$vcs"
     ;;
   remote-url)
-    case "$vcs" in
-      git) git_remote_url ;;
-      jj) jj_remote_url ;;
-      none) ;;
-    esac
+    handler "$vcs" remote_url
     ;;
   forge)
-    url="$($0 remote-url)"
+    url="$(handler "$vcs" remote_url)"
     classify_forge "$url"
     ;;
   default-ref)
-    case "$vcs" in
-      git) git_default_ref ;;
-      jj) jj_default_ref ;;
-      none) echo none ;;
-    esac
+    handler "$vcs" default_ref
     ;;
   review-label)
-    case "$vcs" in
-      git) git rev-parse --abbrev-ref HEAD ;;
-      jj) jj log -r @ --no-graph -T 'change_id.short() ++ "\n"' ;;
-      none) echo none ;;
-    esac
+    handler "$vcs" review_label
     ;;
   head-id)
-    case "$vcs" in
-      git) git rev-parse HEAD ;;
-      jj) jj log -r @ --no-graph -T 'commit_id.short() ++ "\n"' ;;
-      none) echo none ;;
-    esac
+    handler "$vcs" head_id
     ;;
   supports)
     capability="${2:?Usage: vcs supports <branch|commit|push|pr>}"
@@ -182,49 +321,25 @@ case "$cmd" in
     echo "${status#*|}"
     ;;
   current-diff)
-    case "$vcs" in
-      git)
-        git diff "$(git_base_ref)...HEAD"
-        git diff --cached
-        git diff
-        git_diff_untracked
-        ;;
-      jj) jj diff --git ;;
-      none) no_current_change ;;
-    esac
+    handler "$vcs" current_diff
     ;;
   current-files)
-    case "$vcs" in
-      git)
-        {
-          git diff --name-only "$(git_base_ref)...HEAD"
-          git diff --cached --name-only
-          git diff --name-only
-          git_untracked_files
-        } | sort -u
-        ;;
-      jj) jj diff --name-only ;;
-      none) no_current_change ;;
-    esac
+    handler "$vcs" current_files
     ;;
   shortstat)
-    case "$vcs" in
-      git)
-        git diff --shortstat "$(git_base_ref)...HEAD"
-        git diff --cached --shortstat
-        git diff --shortstat
-        git_shortstat_untracked
-        ;;
-      jj) jj diff --stat ;;
-      none) no_current_change ;;
-    esac
+    handler "$vcs" shortstat
     ;;
   status)
-    case "$vcs" in
-      git) git status --porcelain ;;
-      jj) jj status ;;
-      none) echo "No supported VCS detected" ;;
-    esac
+    handler "$vcs" status
+    ;;
+  branch-start)
+    handler "$vcs" branch_start "${2:-}"
+    ;;
+  commit-push)
+    handler "$vcs" commit_push "${2:-}" "${3:-}"
+    ;;
+  fix-commit)
+    handler "$vcs" fix_commit "${2:-}" "${3:-}"
     ;;
   *)
     echo "Unknown command: $cmd" >&2

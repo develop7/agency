@@ -43,17 +43,18 @@ if [ "$vcs" = "git" ]; then
       fi
     fi
   fi
-
-  # Dirty-tree hint (no pause, just print)
-  if [ "$noGit" = "false" ] && [ -n "$($VCS status)" ]; then
-    echo "Dirty tree detected. Continuing will create a fresh branch on top of these changes. If you wanted the agent to extend your WIP in place without touching git, re-run with --no-git." >&2
-  fi
 elif [ "$vcs" = "jj" ]; then
-  # Phase 1 supports read-only JJ change inspection. Avoid jj git fetch/rebase
-  # because JJ has no direct git-pull equivalent and publishing is not wired yet.
   if [ "$noGit" = "false" ]; then
-    echo "Jujutsu repository detected. Phase 1 supports current-change inspection only; branch, commit, push, and PR steps will be skipped." >&2
+    jj git fetch
   fi
+fi
+
+# Dirty-tree hint (no pause, just print)
+if [ "$noGit" = "false" ] && [ -n "$($VCS status)" ]; then
+  case "$vcs" in
+    git) echo "Dirty tree detected. Continuing will create a fresh branch on top of these changes. If you wanted the agent to extend your WIP in place without touching git, re-run with --no-git." >&2 ;;
+    jj)  echo "Dirty tree detected. Continuing will start a new change on top of these changes. If you wanted the agent to extend your WIP in place without touching bookmarks, re-run with --no-git." >&2 ;;
+  esac
 fi
 
 forge="$($VCS forge)"

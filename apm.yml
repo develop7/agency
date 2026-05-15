@@ -4,3 +4,6 @@ description: Near-autonomous workflow for coding agents — talk, do, and qualit
 author: srid
 license: MIT
 type: hybrid
+targets:
+  - claude
+  - opencode

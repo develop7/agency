@@ -36,7 +36,7 @@ Every step is bookended by two `scripts/do-results` calls: `step-start <name>` b
 **Workflow fields /do also stashes via `set`** (the script doesn't interpret these — it just remembers them):
 
 - `forge` — `github`, `bitbucket`, or `unknown`. Populated by `scripts/steps/sync` after forge detection.
-- `vcs` — `git`, `jj`, or `none`. Populated by `scripts/steps/sync` after repository detection. `git` has the full branch/commit/push path. `jj` currently supports read-only current-change inspection; publish support is a later phase.
+- `vcs` — `git`, `jj`, or `none`. Populated by `scripts/steps/sync` after repository detection. `git` has the full branch/commit/push path. `jj` supports the full branch/commit/push/PR path via bookmarks (Phase 2).
 - `noGit` — `true` or `false`. Reflects the `--no-git` flag. Git-mutating steps (**branch**, **commit**, **create-pr**) skip with `reason="--no-git"` when set.
 
 Use `scripts/vcs supports <capability>` and `scripts/vcs unsupported-reason <capability>` for backend capability checks. Do not hardcode backend names in step gates; the capability matrix belongs to the VCS helper so later Jujutsu publish support changes one boundary first.
@@ -93,7 +93,7 @@ The script:
 - Detects the VCS backend with `scripts/vcs detect` and records `vcs=git|jj|none`.
 - For Git, fetches `origin` and pins `origin/HEAD`.
 - For Git, if `--no-git` is **not** set and the branch is behind origin (ahead-count 0), fast-forwards with `git pull --ff-only`. Under `--no-git`, fetching happens but the working tree is not touched — uncommitted work is preserved.
-- For Jujutsu, Phase 1 does not fetch, rebase, create bookmarks, commit, push, or open PRs. It only enables read-only current-change inspection through `scripts/vcs`.
+- For Jujutsu, Phase 2 runs `jj git fetch` to update remote-tracking bookmarks. The branch, commit, push, and PR steps use JJ bookmark semantics (see individual step instructions below).
 - Prints the dirty-tree hint to stderr (no pause) when the tree is dirty and `--no-git` is not set:
 
   > _Dirty tree detected. Continuing will create a fresh branch on top of these changes. If you wanted the agent to extend your WIP in place without touching git, re-run with `--no-git`._
@@ -139,15 +139,17 @@ Use `ExitPlanMode` to present the plan. Once approved, continue autonomously to 
 
 **If `--no-git`**: Skip this step entirely with status `skipped` and reason `"--no-git"`. Stay on the current branch — do not create, commit, or push anything. Move to **implement**.
 
-**If `scripts/vcs supports branch` returns `false`**: Skip this step entirely with status `skipped` and the reason from `scripts/vcs unsupported-reason branch`. Phase 1 keeps unsupported backends' current change in place and only uses read-only inspection helpers. Move to **implement**.
+**If `scripts/vcs supports branch` returns `false`**: Skip this step entirely with status `skipped` and the reason from `scripts/vcs unsupported-reason branch`. Move to **implement**.
 
-Detect the default branch: `git symbolic-ref refs/remotes/origin/HEAD`
+1. Create a descriptive feature branch or working-copy position from the default ref:
 
-1. Create a descriptive feature branch from `origin/<default>`
+   ```sh
+   scripts/vcs branch-start <name>
+   ```
 
-That's it — just the local branch. No commit, no push, no PR. The branch is pushed later in **commit**, and the PR is created in **create-pr** after all changes are done.
+   That's it — just the local branch or working-copy position. No commit, no push, no PR. The branch/bookmark is pushed later in **commit**, and the PR is created in **create-pr** after all changes are done.
 
-**Verify**: On a feature branch (not master/main).
+   **Verify**: `scripts/vcs review-label` returns the feature name (not master/main).
 
 ---
 
@@ -209,11 +211,17 @@ If no format command is documented, skip this step with a note.
 
 **If `scripts/vcs supports commit` returns `false`**: Skip with status `skipped` and the reason from `scripts/vcs unsupported-reason commit`. The current change stays in the working copy/change for the user to publish manually.
 
-Create a NEW commit (never amend) with a conventional commit message for the primary implementation. Push to the feature branch with `git push -u origin <branch>` (sets upstream on first push).
+**For Git**:
+
+Create a NEW commit (never amend) with a conventional commit message for the primary implementation, then push it:
+
+```sh
+scripts/vcs commit-push "<message>" "$(scripts/vcs review-label)"
+```
 
 This is the **primary feature commit**. Downstream **hickey+lowy** and **police** steps produce their own follow-up commits — one per finding or violation addressed — which keeps the PR history a readable progression of "what was built, then what was refined" rather than a single opaque squash.
 
-**Verify**: `git log -1` shows a new commit on the feature branch, and it's pushed to remote.
+**Verify**: `scripts/vcs review-label` points at a described commit and `scripts/vcs head-id` matches the pushed revision.
 
 ---
 
@@ -268,11 +276,15 @@ After the audit (and cross-validation, when run), every finding lands as a commi
 2. Run the project's format command (from **fmt** instructions) on the changed files, if one is configured.
 3. `git add <changed files>` — stage only the files this fix touched.
 4. For Git, `git commit -m "refactor(hickey): <short finding label>"` (or `refactor(lowy): …` depending on the lens). The body of the message should restate the finding in one line so the commit is self-explanatory in `git log`.
-5. For Git, `git push` — push after each commit so the draft PR (once created) accumulates commits in real time. (The `-u` flag is only needed on the first push, which already happened in **commit**.)
+   5. Push the fix:
+
+      ```sh
+      scripts/vcs fix-commit "<message>" "$(scripts/vcs review-label)"
+      ```
 
 **Under `--no-git`, or when `scripts/vcs supports commit` returns `false`**: Skip the commit/push steps entirely. Apply fixes to the working tree/current change and move on — the user will review the combined delta themselves. Record the step as passed with verification noting why fixes were not committed.
 
-**Verify**: Both hickey and lowy produced review output using their respective skills, either through sub-agents or the main-model fallback. Cross-validation ran (or was correctly skipped because both reviewers returned zero findings). Every finding — first-pass or cross-validation — has an action recorded, either **Fix in this PR** or **No-op** (no defers; if the sub-agent emitted one, the audit step above flipped it to Fix in this PR). Every "Fix in this PR" finding has a corresponding commit on the feature branch (check via `git log origin/HEAD..HEAD --oneline`), except under `--no-git` or when `scripts/vcs supports commit` returns `false`. No unactioned findings; no deferred findings.
+**Verify**: Both hickey and lowy produced review output using their respective skills, either through sub-agents or the main-model fallback. Cross-validation ran (or was correctly skipped because both reviewers returned zero findings). Every finding — first-pass or cross-validation — has an action recorded, either **Fix in this PR** or **No-op** (no defers; if the sub-agent emitted one, the audit step above flipped it to Fix in this PR). Every "Fix in this PR" finding has a corresponding commit on the feature branch/bookmark (check via `git log origin/HEAD..HEAD --oneline` for Git, or `jj log -r <bookmark-name>` for Jujutsu), except under `--no-git` or when `scripts/vcs supports commit` returns `false`. No unactioned findings; no deferred findings.
 
 ---
 
@@ -297,13 +309,17 @@ For each violation reported by `/code-police` (across all three passes), in turn
    - Rules pass: `fix(police): <rule-id> — <short description>` (e.g. `fix(police): no-dead-code — remove commented-out fallback`)
    - Fact-check pass: `fix(police): fact-check — <short description>` (e.g. `fix(police): fact-check — propagate error from loader`)
    - Elegance pass (`/simplify`-applied or inline-loop-applied): `refactor(police): elegance — <short description>`
-5. For Git, `git push`.
+   5. Push the fix:
+
+      ```sh
+      scripts/vcs fix-commit "<message>" "$(scripts/vcs review-label)"
+      ```
 
 For the elegance pass specifically: `/simplify` applies fixes in batches across three lenses (reuse, quality, efficiency). Commit each distinct refactor as a separate commit — do not roll them into one "elegance" commit. If a lens produces multiple independent changes (two reuse-via-helper refactors in different files, say), those are separate commits too.
 
 **Under `--no-git`, or when `scripts/vcs supports commit` returns `false`**: Skip the commit/push steps. Apply fixes to the working tree/current change and continue. The user reviews the combined delta.
 
-**Verify**: All 3 passes clean ("All clear"). Under `--no-git` or when `scripts/vcs supports commit` returns `false`, the tree/current change reflects the fixes; otherwise `git log origin/HEAD..HEAD --oneline` shows one commit per violation addressed.
+**Verify**: All 3 passes clean ("All clear"). Under `--no-git` or when `scripts/vcs supports commit` returns `false`, the tree/current change reflects the fixes; otherwise `git log origin/HEAD..HEAD --oneline` (Git) or `jj log -r <bookmark-name>` (Jujutsu) shows one commit per violation addressed.
 **If violations found** (max 3 attempts): Fix the violations (one commit per fix, as above) and re-invoke `/code-police`.
 
 ---
@@ -327,17 +343,25 @@ If changes are purely internal with no user-facing impact, unit tests may suffic
 
 **If `--no-git`**: Skip with status `skipped` and reason `"--no-git"`. There is no PR to create. Proceed to **ci**.
 
-**If `scripts/vcs supports pr` returns `false`**: Skip with status `skipped` and the reason from `scripts/vcs unsupported-reason pr`. Phase 1 has no pushed bookmark or branch for a PR on unsupported backends. Proceed to **ci**.
+**If `scripts/vcs supports pr` returns `false`**: Skip with status `skipped` and the reason from `scripts/vcs unsupported-reason pr`. Proceed to **ci**.
 
 **If `forge != github`**: Skip with status `skipped` and reason `"non-<forge> forge: <forge>"`. (Bitbucket `bkt pr edit` wiring is tracked in #10.) Proceed to **ci**.
 
 **If `forge == github`**:
 
-Check whether a PR already exists for this branch (`gh pr view`).
+Check whether a PR already exists for the current review label:
+
+```sh
+gh pr view "$(scripts/vcs review-label)"
+```
 
 **If no PR exists** (first run, normal path):
 
-1. Create a draft PR: `gh pr create --draft`
+1. Create a draft PR:
+
+   ```sh
+   gh pr create --draft --head "$(scripts/vcs review-label)"
+   ```
 
    **MANDATORY**: Load the `forge-pr` skill (via Skill tool) BEFORE writing the PR title/body.
 
