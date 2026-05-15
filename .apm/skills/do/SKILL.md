@@ -43,6 +43,7 @@ Use `scripts/vcs supports <capability>` and `scripts/vcs unsupported-reason <cap
 
 **Commands** (invoke with the full path, e.g. `.../skills/do/scripts/do-results ...`):
 
+- `gh-jj` — transparent `gh` CLI wrapper that sets `GIT_DIR` automatically in non-colocated jj repos so `gh pr create/view/comment/edit/issue` work without extra env configuration. All `gh` commands referenced below should be run through this wrapper (e.g. `scripts/gh-jj pr create ...`).
 - `init` — initialize the workflow's lifecycle skeleton. Echoes `init: startedAt=<ts>`.
 - `step-start <name>` — call before step work. Echoes `pending: <name>`.
 - `step-end <status> "<verification>" ["<reason>"]` — call after verification. Echoes `recorded: <name> <status> (steps=<count>, pending=<none|name>)`.
@@ -112,7 +113,7 @@ The script:
 
 Research the task thoroughly before writing code.
 
-- If given a GitHub issue URL **and** `forge == github`, fetch with `gh issue view`. On non-GitHub forges, treat any issue-like URL as opaque context — use the prompt text as-is and do not attempt to fetch. (Bitbucket issue/Jira fetching is tracked in #10.)
+- If given a GitHub issue URL **and** `forge == github`, fetch with `scripts/gh-jj issue view`. On non-GitHub forges, treat any issue-like URL as opaque context — use the prompt text as-is and do not attempt to fetch. (Bitbucket issue/Jira fetching is tracked in #10.)
 - **Never assume** how something works. Read the code. Check the config.
 - If the prompt involves external tools/libraries, prefer `git clone` to a scratch dir (e.g. `/tmp/<name>`) at the version the project actually uses, then read the source on disk with `Read`/`Grep`/`Glob`. Fall back to `WebSearch`/`WebFetch` only when the source genuinely isn't a clonable repo (vendor docs, blog posts, RFCs).
 
@@ -352,7 +353,7 @@ If changes are purely internal with no user-facing impact, unit tests may suffic
 Check whether a PR already exists for the current review label:
 
 ```sh
-gh pr view "$(scripts/vcs review-label)"
+scripts/gh-jj pr view "$(scripts/vcs review-label)"
 ```
 
 **If no PR exists** (first run, normal path):
@@ -360,7 +361,7 @@ gh pr view "$(scripts/vcs review-label)"
 1. Create a draft PR:
 
    ```sh
-   gh pr create --draft --head "$(scripts/vcs review-label)"
+   scripts/gh-jj pr create --draft --head "$(scripts/vcs review-label)"
    ```
 
    **MANDATORY**: Load the `forge-pr` skill (via Skill tool) BEFORE writing the PR title/body.
@@ -388,7 +389,7 @@ gh pr view "$(scripts/vcs review-label)"
 
 **If PR already exists** (followup runs, `--from` entry points):
 
-Re-check the PR title/body against current scope. If scope changed, update via `gh pr edit` per the `forge-pr` skill.
+Re-check the PR title/body against current scope. If scope changed, update via `scripts/gh-jj pr edit` per the `forge-pr` skill.
 
 **Why this runs before `ci`**: The draft PR is the canonical home for CI status. Opening it before CI runs means CI checks land directly on the PR, reviewers see the run history as it happens, and a failing run doesn't leave an orphaned branch with red statuses and no PR to explain them. If retries exhaust in **ci**, the draft PR remains as the artifact of the failed attempt — visible, reviewable, and ready to resume via `--from ci-only`.
 
@@ -443,7 +444,7 @@ The sub-agent prompt should include:
 After the sub-agent returns, post its output as one PR comment using `gh pr comment` under a `## Evidence` heading. Use the **single-quoted heredoc** pattern (see `forge-pr` → "Passing the body to `gh` safely") so backticks and `$` survive unescaped:
 
 ```sh
-gh pr comment --body "$(cat <<'EOF'
+scripts/gh-jj pr comment --body "$(cat <<'EOF'
 ## Evidence
 
 <markdown returned by the sub-agent>
@@ -504,7 +505,7 @@ Be specific to this run's data, not generic advice.
 **If `forge == github`**: Report the PR URL. Then post the final step status table as a **PR comment** using `gh pr comment`. Use the markdown table and slowest-step line emitted by `scripts/steps/done` verbatim (strip the trailing `<<<FACTS ... FACTS` block — that's internal). Format:
 
 ```
-gh pr comment --body "$(cat <<'COMMENT'
+scripts/gh-jj pr comment --body "$(cat <<'COMMENT'
 ## [`/do`](https://github.com/srid/agency) results
 
 | Step | Status | Duration | Verification |

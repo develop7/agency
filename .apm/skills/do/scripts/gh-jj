@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# Transparent gh CLI wrapper for non-colocated Jujutsu repos.
+#
+# In non-colocated jj repos, the backing Git store lives under .jj/ rather than
+# at the repo root, so gh cannot find it. This wrapper detects that situation,
+# sets GIT_DIR automatically, and execs the real gh.
+#
+# Usage: scripts/gh-jj <gh-subcommand> [args...]
+#   e.g. scripts/gh-jj pr view
+#        scripts/gh-jj pr create --draft --head feat-foo
+#        scripts/gh-jj issue view 123
+
+set -euo pipefail
+
+# Only jj needs special handling; git repos pass through transparently.
+if command -v jj >/dev/null 2>&1 && jj root >/dev/null 2>&1; then
+  repo_root="$(jj root)"
+  if [ ! -d "$repo_root/.git" ]; then
+    # Non-colocated jj repo: point gh at the backing git store
+    export GIT_DIR="$(jj git root)"
+  fi
+fi
+
+exec gh "$@"

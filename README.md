@@ -67,7 +67,7 @@ Review the staged changes before committing. Pasting the same prompt again later
 
 - **`do`** — Full pipeline: research → implement → structural review (`hickey`, `lowy`) → quality gate (`code-police`) → CI → evidence (opt-in) → ship. Skip specific steps by mentioning them in the prompt, or pass **`--minimal`** to skip docs / structural review / police / evidence wholesale on trivially-scoped diffs (one-line fixes, typos, config tweaks).
 
-  Git repos get the full branch/commit/push/PR path. Jujutsu repos get full `/do` support via bookmarks (Phase 2): `jj new`, `jj commit`, `jj bookmark create/track`, `jj git push`, and `gh pr create --head <bookmark>`. The `--no-git` flag still bypasses all VCS mutations if you want to work in place.
+  Git repos get the full branch/commit/push/PR path. Jujutsu repos get full `/do` support via bookmarks (Phase 2): `jj new`, `jj commit`, `jj bookmark create/track`, `jj git push`, and `gh pr create --head <bookmark>`. Phase 3 adds transparent `gh` CLI support for non-colocated jj repos via `scripts/gh-jj` (sets `GIT_DIR` automatically). The `--no-git` flag still bypasses all VCS mutations if you want to work in place.
 - **`talk`** — Conversation-and-research mode. Discuss ideas, explore approaches, read code, inspect upstream sources in temporary scratch space when needed — no repo changes allowed. Auto-runs `hickey` + `lowy` on design sketches.
 - **`ralph`** — Iterative measurement-driven improvement loop. Measure, profile, mutate, re-measure, commit. Works for performance, bundle size, complexity — anything quantifiable.
 
