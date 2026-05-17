@@ -202,15 +202,15 @@ jj_head_id() {
 }
 
 jj_current_diff() {
-  jj diff --git
+  jj diff --git --from "$(jj_default_ref)"
 }
 
 jj_current_files() {
-  jj diff --name-only
+  jj diff --name-only --from "$(jj_default_ref)"
 }
 
 jj_shortstat() {
-  jj diff --stat
+  jj diff --stat --from "$(jj_default_ref)"
 }
 
 jj_status() {
@@ -235,8 +235,6 @@ jj_commit_push() {
 jj_fix_commit() {
   local msg="$1" label="$2"
   if [ -z "$msg" ] || [ -z "$label" ]; then echo "Usage: vcs fix-commit <message> <label>" >&2; exit 2; fi
-  jj new "$label"
-  # apply fix
   jj commit -m "$msg"
   jj bookmark move "$label" --to @-
   jj git push --bookmark "$label"

@@ -275,13 +275,13 @@ After the audit (and cross-validation, when run), every finding lands as a commi
 
 1. Apply the fix narrowly — only the lines that address this specific finding.
 2. Run the project's format command (from **fmt** instructions) on the changed files, if one is configured.
-3. `git add <changed files>` — stage only the files this fix touched.
-4. For Git, `git commit -m "refactor(hickey): <short finding label>"` (or `refactor(lowy): …` depending on the lens). The body of the message should restate the finding in one line so the commit is self-explanatory in `git log`.
-   5. Push the fix:
+3. Commit and push the fix:
 
-      ```sh
-      scripts/vcs fix-commit "<message>" "$(scripts/vcs review-label)"
-      ```
+   ```sh
+   scripts/vcs fix-commit "refactor(hickey): <short finding label>" "$(scripts/vcs review-label)"
+   ```
+
+   (Use `refactor(lowy):` prefix for Lowy findings.) The commit message body should restate the finding in one line so the commit is self-explanatory in the log.
 
 **Under `--no-git`, or when `scripts/vcs supports commit` returns `false`**: Skip the commit/push steps entirely. Apply fixes to the working tree/current change and move on — the user will review the combined delta themselves. Record the step as passed with verification noting why fixes were not committed.
 
@@ -305,16 +305,16 @@ For each violation reported by `/code-police` (across all three passes), in turn
 
 1. Apply the fix for that one violation — scope the edit tightly.
 2. Run the project's format command on changed files, if configured.
-3. `git add <changed files>` — stage only this fix.
-4. Commit with a conventional prefix identifying the pass and rule:
+3. Commit and push the fix:
+
+   ```sh
+   scripts/vcs fix-commit "<prefix>" "$(scripts/vcs review-label)"
+   ```
+
+   Commit prefix identifies the pass and rule:
    - Rules pass: `fix(police): <rule-id> — <short description>` (e.g. `fix(police): no-dead-code — remove commented-out fallback`)
    - Fact-check pass: `fix(police): fact-check — <short description>` (e.g. `fix(police): fact-check — propagate error from loader`)
    - Elegance pass (`/simplify`-applied or inline-loop-applied): `refactor(police): elegance — <short description>`
-   5. Push the fix:
-
-      ```sh
-      scripts/vcs fix-commit "<message>" "$(scripts/vcs review-label)"
-      ```
 
 For the elegance pass specifically: `/simplify` applies fixes in batches across three lenses (reuse, quality, efficiency). Commit each distinct refactor as a separate commit — do not roll them into one "elegance" commit. If a lens produces multiple independent changes (two reuse-via-helper refactors in different files, say), those are separate commits too.
 
