@@ -9,7 +9,7 @@ Opt-in: capture and post empirical evidence (screenshots, benchmarks, transcript
 
 ## Requires
 
-- `noGit` — caller flag
+- `vcs_enabled` — caller flag
 - `minimal` — caller flag
 - `forge` — from sync
 - `pr_url` — from create-pr (skipped if absent)
@@ -21,7 +21,7 @@ Opt-in: capture and post empirical evidence (screenshots, benchmarks, transcript
 ## Strategies
 
 - **If `minimal`**: skip with `status="skipped"` and `reason="--minimal"`. Move to **done**.
-- **If `noGit`**: skip with `status="skipped"` and `reason="--no-git"`. There is no PR to attach evidence to.
+- **If `vcs_enabled` is `false`**: skip with `status="skipped"` and `reason="--no-vcs"`. There is no PR to attach evidence to.
 - **If `forge != github`**: skip with `status="skipped"` and `reason="non-<forge> forge: <forge>"`. (Bitbucket comment wiring is tracked in [srid/agency#10](https://github.com/srid/agency/issues/10).)
 - **Otherwise**: read `.agency/do.md` and look for a `## PR evidence` section. If `.agency/do.md` is missing, or the section is missing or empty, skip with `status="skipped"` and `reason="no PR evidence section in .agency/do.md"` — the default for projects that haven't opted in.
 
@@ -32,7 +32,7 @@ The section is project-specific and free-form: it can be inline prose describing
 The sub-agent prompt should include:
 
 - The literal section content from `.agency/do.md`.
-- Standard PR context: `pr_url`, `branch`, `default_branch`, `git rev-parse HEAD`, and `git diff origin/<default_branch>...HEAD --name-only` so the sub-agent knows which routes/files to exercise.
+- Standard PR context: `pr_url`, `branch`, `trunk`, `vcs current-revision`, and `vcs files-changed` so the sub-agent knows which routes/files to exercise.
 - An explicit instruction that the sub-agent's job is to return a single block of markdown (image links embedded, table data inline, etc.) suitable for posting under a `## Evidence` heading. The sub-agent should not post the comment itself — only return the markdown.
 
 After the sub-agent returns, post its output as one PR comment using `gh pr comment` under a `## Evidence` heading. Use the **single-quoted heredoc** pattern (see `forge-pr` → "Passing the body to `gh` safely") so backticks and `$` survive unescaped:

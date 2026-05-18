@@ -9,9 +9,9 @@ Emit the timing summary, optimization suggestions, and the final status comment.
 
 ## Requires
 
-- `noGit` — caller flag
+- `vcs_enabled` — caller flag
 - `forge` — from sync
-- `pr_url` — from create-pr (absent under `noGit` or non-github)
+- `pr_url` — from create-pr (absent when `vcs_enabled` is `false` or non-github)
 - All preceding nodes' receipts via `.do-results.json` (read by the script)
 
 ## Ensures
@@ -19,7 +19,7 @@ Emit the timing summary, optimization suggestions, and the final status comment.
 - `timing_table` — markdown table of all nodes (step, status, duration, verification)
 - (side effect) workflow `status` set to `completed` or `failed`
 - (side effect) workflow `active` set to `false`
-- (side effect, when github + not noGit) final status comment posted to the PR
+- (side effect, when github + vcs_enabled) final status comment posted to the PR
 
 ## Strategies
 
@@ -28,7 +28,7 @@ Present a summary of all nodes with their verification status. If any node has a
 `"completed"` requires **all nodes `passed`**, with four exceptions that count toward completion (the [skip taxonomy in execution.md](../execution.md#skip-taxonomy)):
 
 1. A node `skipped` with `reason` beginning `"non-<forge> forge:"` (detected forge isn't GitHub).
-2. A node `skipped` with `reason` `"--no-git"` (user opted out of git operations).
+2. A node `skipped` with `reason` `"--no-vcs"` (user opted out of VCS operations).
 3. A node `skipped` with `reason` `"no PR evidence section in .agency/do.md"` (project hasn't opted into the evidence step — this is the default).
 4. A node `skipped` with `reason` `"--minimal"` (user opted out of structural review / docs / quality gate / evidence on a trivial diff).
 
@@ -59,8 +59,8 @@ Be specific to this run's data, not generic advice.
 
 ### PR comment & wrap-up
 
-- **If `noGit`**: There is no branch or PR to report against. Print the timing table and optimization suggestions to the terminal only. List the files modified in the working tree (`git status --porcelain`) so the user can see what the agent touched. Remind the user that changes are uncommitted — the commit/push/PR steps are theirs to run.
-- **If `forge != github`**: Report the branch name (and remote URL, if available via `git remote get-url origin`) instead of a PR URL. Print the timing table and optimization suggestions to the terminal only — do **not** attempt to post a PR comment. (Bitbucket `bkt pr comment` wiring is tracked in [srid/agency#10](https://github.com/srid/agency/issues/10).)
+- **If `vcs_enabled` is `false`**: There is no branch or PR to report against. Print the timing table and optimization suggestions to the terminal only. List the files modified in the working tree (`vcs status`) so the user can see what the agent touched. Remind the user that changes are uncommitted — the commit/push/PR steps are theirs to run.
+- **If `forge != github`**: Report the branch name (and remote URL, if available via `vcs remote-url`) instead of a PR URL. Print the timing table and optimization suggestions to the terminal only — do **not** attempt to post a PR comment. (Bitbucket `bkt pr comment` wiring is tracked in [srid/agency#10](https://github.com/srid/agency/issues/10).)
 - **If `forge == github`**: Report the PR URL. Then post the final step status table as a **PR comment** using `gh pr comment`. Use the markdown table and slowest-step line emitted by `scripts/steps/done` verbatim (strip the trailing `<<<FACTS ... FACTS` block — that's internal). Format:
 
 ```sh
@@ -97,6 +97,6 @@ Note: `done` itself always records `step-end passed` for itself — even if the 
 
 ## Verify
 
-- Timing table printed (or posted to PR on github + not noGit).
+- Timing table printed (or posted to PR on github + vcs_enabled).
 - Workflow `status` set to `completed` or `failed` per the predicate above.
 - Workflow `active` set to `false` (the stop hook checks this to allow graceful exit).

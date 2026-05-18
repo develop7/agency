@@ -34,7 +34,7 @@ config:
 ## Strategies
 
 - **If `minimal`**: skip with `status="skipped"` and `reason="--minimal"`. Move to **fmt**.
-- Read `.agency/do.md` and look for a `## Documentation` section listing which docs to keep in sync (e.g., `README.md`, `website/src/pages/index.astro`). Compare those files against changes in this PR.
+- Read `.agency/do.md` and look for a `## Documentation` section listing which docs to keep in sync (e.g., `README.md`, `website/src/pages/index.astro`). Compare those files against changes in this branch.
 - If no documentation files are documented, the runner returns `no-command-configured`; record as `skipped` with reason `"no documentation declared in .agency/do.md"`.
 
 ## Receipt

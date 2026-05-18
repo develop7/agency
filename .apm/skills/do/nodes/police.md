@@ -10,14 +10,14 @@ Run `/code-police` (rules → fact-check → elegance) and commit each violation
 
 ## Requires
 
-- `noGit` — caller flag
+- `vcs_enabled` — caller flag
 - `minimal` — caller flag
-- `default_branch` — from sync (used to scope the diff)
+- `trunk` — from sync (used to scope the diff)
 
 ## Ensures
 
 - `verdict` — `pass` | `failed-after-budget` | `no-command-configured`
-- (side effect, unless `noGit`) one commit per violation fix, pushed
+- (side effect, unless `vcs_enabled` is `false`) one commit per violation fix, pushed
 
 ## Pattern
 
@@ -36,7 +36,7 @@ config:
 ## Strategies
 
 - **If `minimal`**: skip with `status="skipped"` and `reason="--minimal"`. Move to **test**. Do not invoke `/code-police`.
-- Use `git diff origin/<default_branch>...HEAD --name-only` to check if the PR contains code changes. If all changed files are documentation-only (e.g., `.md`, `.txt`, `README`, `docs/`) — skip with `status="skipped"` and `reason="docs-only diff"`.
+- Use `vcs files-changed` to check if the PR contains code changes. If all changed files are documentation-only (e.g., `.md`, `.txt`, `README`, `docs/`) — skip with `status="skipped"` and `reason="docs-only diff"`.
 - Otherwise, invoke the `/code-police` skill via the Skill tool. It runs three passes: rule checklist, fact-check, and elegance (which delegates to `/simplify` when available).
 - When `/code-police` asks about scope: **changes in the current branch/PR only**.
 - **Commit each violation fix individually.** The same rule as `hickey-lowy`: PR history is the story of the work, and a reviewer should see one commit per rule violation or elegance refinement, not a lump "police pass" commit covering eight unrelated things.
@@ -49,7 +49,7 @@ For each violation reported by `/code-police` (across all three passes), the `co
 
 For the elegance pass specifically: `/simplify` applies fixes in batches across three lenses (reuse, quality, efficiency). Commit each distinct refactor as a separate commit — do not roll them into one "elegance" commit. If a lens produces multiple independent changes (two reuse-via-helper refactors in different files, say), those are separate commits too.
 
-**Under `noGit`**: pass-through to the pattern, which will skip the commit/push arm. Apply fixes to the working tree and continue. The user reviews the combined delta.
+**Under `vcs_enabled == false`**: pass-through to the pattern, which will skip the commit/push arm. Apply fixes to the working tree and continue. The user reviews the combined delta.
 
 ## Receipt
 
@@ -63,7 +63,7 @@ For the elegance pass specifically: `/simplify` applies fixes in batches across 
 
 ## Verify
 
-All 3 passes clean ("All clear"). Under `noGit`, the tree reflects the fixes; otherwise `git log origin/<default_branch>..HEAD --oneline` shows one commit per violation addressed.
+All 3 passes clean ("All clear"). Under `vcs_enabled == false`, the tree reflects the fixes; otherwise `vcs commits-since-base` shows one commit per violation addressed.
 
 ## Errors
 

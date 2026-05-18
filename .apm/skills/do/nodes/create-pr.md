@@ -9,7 +9,7 @@ Open the draft PR and post the hickey/lowy analysis comment. Forge-aware. One-sh
 
 ## Requires
 
-- `noGit` — caller flag
+- `vcs_enabled` — caller flag
 - `forge` — from sync
 - `branch` — from sync (current) or branch (new feature branch)
 - `review_findings` — from hickey-lowy (may be empty)
@@ -17,13 +17,13 @@ Open the draft PR and post the hickey/lowy analysis comment. Forge-aware. One-sh
 
 ## Ensures
 
-- `pr_url` — string; absent under `noGit` or non-github forge
+- `pr_url` — string; absent when `vcs_enabled` is `false` or non-github forge
 - (side effect) draft PR created (or re-checked if already exists)
 - (side effect) hickey/lowy analysis posted as a PR comment
 
 ## Strategies
 
-- **If `noGit`**: skip with `status="skipped"` and `reason="--no-git"`. There is no PR to create. Proceed to **ci**.
+- **If `vcs_enabled` is `false`**: skip with `status="skipped"` and `reason="--no-vcs"`. There is no PR to create. Proceed to **ci**.
 - **If `forge != github`**: skip with `status="skipped"` and `reason="non-<forge> forge: <forge>"`. (Bitbucket `bkt pr edit` wiring is tracked in [srid/agency#10](https://github.com/srid/agency/issues/10).) Proceed to **ci**.
 - **If `forge == github`**:
 
@@ -66,7 +66,7 @@ The draft PR is the canonical home for CI status. Opening it before CI runs mean
 
 ```
 .../skills/do/scripts/do-results step-start create-pr
-# under --no-git or non-github, immediately:
+# under --no-vcs or non-github, immediately:
 .../skills/do/scripts/do-results step-end skipped "<reason>" "<reason-tag>"
 # otherwise, after creating + posting:
 .../skills/do/scripts/do-results step-end passed "draft PR <url> created; hickey/lowy comment posted"

@@ -1,0 +1,315 @@
+#!/usr/bin/env bash
+# VCS abstraction script for /do workflow.
+# Auto-detects git vs jj backend and dispatches commands.
+#
+# Usage:
+#   vcs <subcommand> [args...]
+#
+# Subcommands:
+#   detect              → prints vcs=git|jj
+#   fetch               → fetch from origin
+#   trunk       → print the default trunk name (e.g., main, master)
+#   current-branch      → print current branch/bookmark name
+#   create-branch <name>→ create and switch to a new branch/bookmark
+#   commit <msg>        → commit current changes with message
+#   push                → push current branch/bookmark to origin
+#   diff-against-base   → print diff against trunk
+#   commits-since-base  → print commits since trunk (one per line)
+#   files-changed       → print files changed since trunk (one per line)
+#   status              → print working tree status
+#   current-revision    → print current revision identifier
+#   remote-url          → print origin remote URL
+
+set -euo pipefail
+
+# ---------------------------------------------------------------------------
+# Backend detection
+# ---------------------------------------------------------------------------
+
+detect_backend() {
+  if [ -n "${VCS_BACKEND:-}" ]; then
+    echo "$VCS_BACKEND"
+    return
+  fi
+  if [ -d ".jj" ]; then
+    echo "jj"
+  elif [ -d ".git" ]; then
+    echo "git"
+  else
+    echo "vcs: no .git or .jj directory found" >&2
+    exit 1
+  fi
+}
+
+BACKEND="$(detect_backend)"
+
+# ---------------------------------------------------------------------------
+# Git implementations
+# ---------------------------------------------------------------------------
+
+git_trunk() {
+  git rev-parse --abbrev-ref HEAD
+}
+
+git_current_branch() {
+  git rev-parse --abbrev-ref HEAD
+}
+
+git_create_branch() {
+  local name="$1"
+  local trunk
+  trunk="$(git_trunk)"
+  git checkout -b "$name" "origin/$trunk"
+}
+
+git_commit() {
+  local msg="$1"
+  git commit -m "$msg"
+}
+
+git_push() {
+  local branch
+  branch="$(git_current_branch)"
+  git push -u origin "$branch"
+}
+
+git_diff_against_base() {
+  local trunk
+  trunk="$(git_trunk)"
+  git diff "origin/$trunk...HEAD"
+}
+
+git_commits_since_base() {
+  local trunk
+  trunk="$(git_trunk)"
+  git log "origin/$trunk..HEAD" --oneline
+}
+
+git_files_changed() {
+  local trunk
+  trunk="$(git_trunk)"
+  git diff "origin/$trunk...HEAD" --name-only
+}
+
+git_status() {
+  git status --porcelain
+}
+
+git_current_revision() {
+  git rev-parse HEAD
+}
+
+git_remote_url() {
+  git remote get-url origin
+}
+
+git_is_dirty() {
+  [ -n "$(git status --porcelain)" ]
+}
+
+# ---------------------------------------------------------------------------
+# Jujutsu implementations
+# ---------------------------------------------------------------------------
+
+jj_trunk() {
+  # Return the closest bookmark: prefer the bookmark on @- (parent of working copy),
+  # which supports stacked PRs naturally.
+  local trunk=""
+  trunk="$(jj log -r "@-" --no-graph -T 'bookmarks' 2>/dev/null | tr ' ' '\n' | grep -v '@' | head -1 | tr -d ' ')"
+  if [ -n "$trunk" ]; then
+    echo "$trunk"
+    return
+  fi
+  # Fallback: bookmark on @ itself (e.g., right after branch creation)
+  trunk="$(jj log -r "@" --no-graph -T 'bookmarks' 2>/dev/null | tr ' ' '\n' | grep -v '@' | head -1 | tr -d ' ')"
+  if [ -n "$trunk" ]; then
+    echo "$trunk"
+    return
+  fi
+  # Last resort: any tracked bookmark
+  trunk="$(jj bookmark list 2>/dev/null | grep '@origin' | head -1 | cut -d: -f1 | tr -d ' ')"
+  if [ -n "$trunk" ]; then
+    echo "$trunk"
+    return
+  fi
+  echo "vcs: could not determine default trunk in jj repo" >&2
+  exit 1
+}
+
+jj_current_branch() {
+  # In jj, the active bookmark (if any)
+  jj bookmark list 2>/dev/null | grep '^[a-zA-Z]' | head -1 | cut -d: -f1 | tr -d ' ' || echo ""
+}
+
+jj_create_branch() {
+  local name="$1"
+  local trunk
+  trunk="$(jj_trunk)"
+  jj new "$trunk" -m "Create branch $name from $trunk"
+  jj bookmark create "$name" -r "@"
+}
+
+jj_commit() {
+  local msg="$1"
+  jj describe -m "$msg"
+  jj new
+}
+
+jj_push() {
+  local branch
+  branch="$(jj_current_branch)"
+  if [ -z "$branch" ]; then
+    echo "vcs: no active bookmark to push" >&2
+    exit 1
+  fi
+  jj git push --bookmark "$branch"
+}
+
+jj_diff_against_base() {
+  local trunk
+  trunk="$(jj_trunk)"
+  jj diff --from "$trunk" --to "@"
+}
+
+jj_commits_since_base() {
+  local trunk
+  trunk="$(jj_trunk)"
+  jj log -r "$trunk..@" --no-graph -T 'description' 2>/dev/null || true
+}
+
+jj_files_changed() {
+  local trunk
+  trunk="$(jj_trunk)"
+  jj diff --from "$trunk" --to "@" --name-only
+}
+
+jj_status() {
+  jj status
+}
+
+jj_current_revision() {
+  jj log -r @ -T 'change_id' --no-graph 2>/dev/null | head -1 | tr -d ' ' || true
+}
+
+jj_remote_url() {
+  jj git remote list 2>/dev/null | awk '$1 == "origin" {print $2}' | head -1
+}
+
+jj_is_dirty() {
+  # In jj, "dirty" means @ has changes compared to its parent (@-).
+  # This indicates existing WIP before the workflow starts.
+  local parent_changes
+  parent_changes="$(jj diff --from "@-" --to "@" --name-only 2>/dev/null)"
+  [ -n "$parent_changes" ]
+}
+
+# ---------------------------------------------------------------------------
+# Dispatch
+# ---------------------------------------------------------------------------
+
+CMD="${1:?Usage: vcs <subcommand> [args...]}"
+shift
+
+case "$CMD" in
+  detect)
+    echo "vcs=$BACKEND"
+    ;;
+  fetch)
+    if [ "$BACKEND" = "git" ]; then
+      git fetch origin
+    else
+      jj git fetch
+    fi
+    ;;
+  trunk)
+    if [ "$BACKEND" = "git" ]; then
+      git_trunk
+    else
+      jj_trunk
+    fi
+    ;;
+  current-branch)
+    if [ "$BACKEND" = "git" ]; then
+      git_current_branch
+    else
+      jj_current_branch
+    fi
+    ;;
+  create-branch)
+    NAME="${1:?create-branch requires a name argument}"
+    if [ "$BACKEND" = "git" ]; then
+      git_create_branch "$NAME"
+    else
+      jj_create_branch "$NAME"
+    fi
+    ;;
+  commit)
+    MSG="${1:?commit requires a message argument}"
+    if [ "$BACKEND" = "git" ]; then
+      git_commit "$MSG"
+    else
+      jj_commit "$MSG"
+    fi
+    ;;
+  push)
+    if [ "$BACKEND" = "git" ]; then
+      git_push
+    else
+      jj_push
+    fi
+    ;;
+  diff-against-base)
+    if [ "$BACKEND" = "git" ]; then
+      git_diff_against_base
+    else
+      jj_diff_against_base
+    fi
+    ;;
+  commits-since-base)
+    if [ "$BACKEND" = "git" ]; then
+      git_commits_since_base
+    else
+      jj_commits_since_base
+    fi
+    ;;
+  files-changed)
+    if [ "$BACKEND" = "git" ]; then
+      git_files_changed
+    else
+      jj_files_changed
+    fi
+    ;;
+  status)
+    if [ "$BACKEND" = "git" ]; then
+      git_status
+    else
+      jj_status
+    fi
+    ;;
+  current-revision)
+    if [ "$BACKEND" = "git" ]; then
+      git_current_revision
+    else
+      jj_current_revision
+    fi
+    ;;
+  remote-url)
+    if [ "$BACKEND" = "git" ]; then
+      git_remote_url
+    else
+      jj_remote_url
+    fi
+    ;;
+  is-dirty)
+    if [ "$BACKEND" = "git" ]; then
+      git_is_dirty
+    else
+      jj_is_dirty
+    fi
+    ;;
+  *)
+    echo "vcs: unknown subcommand: $CMD" >&2
+    echo "Usage: vcs <detect|fetch|trunk|current-branch|create-branch|commit|push|diff-against-base|commits-since-base|files-changed|status|current-revision|remote-url>" >&2
+    exit 1
+    ;;
+esac

@@ -10,7 +10,7 @@ Cheapest static-correctness gate in the pipeline (typeck/buildcheck). Runs first
 
 ## Requires
 
-- `noGit` — caller flag (does not skip this node; only affects whether fixes commit)
+- `vcs_enabled` — caller flag (does not skip this node; only affects whether fixes commit)
 
 ## Ensures
 

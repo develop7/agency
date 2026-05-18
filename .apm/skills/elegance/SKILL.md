@@ -12,7 +12,11 @@ Run for **3 iterations** (or as specified by the user — can be a number or a d
 ## 0. Determine Scope
 
 - Before starting, use the `AskUserQuestion` tool to ask: should this operate on the **whole codebase** or only on **changes in the current branch/PR**?
-- If scoped to current branch/PR, use `git diff main...HEAD` (or the appropriate base branch) to identify changed files and limit all subsequent steps to those files only.
+- If invoked from `/do` with pre-computed `changed_files` and `diff_scope`, use those parameters directly.
+- If scoped to current branch/PR and invoked standalone, auto-detect VCS (`.jj/` vs `.git/`):
+  - For jj: use `jj diff --from main --to @ --name-only` to identify changed files
+  - For git: use `git diff main...HEAD --name-only` (or the appropriate base branch) to identify changed files
+- Limit all subsequent steps to the identified files.
 
 ## For each iteration (1 to N):
 

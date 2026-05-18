@@ -9,7 +9,7 @@ This file is the **system-level Execution block** — the pinned choreography. B
 ```prose
 # Coordination + research
 call sync
-  noGit: noGit                         # caller flag
+  vcs_enabled: vcs_enabled             # caller flag
 
 call research
   task: task
@@ -20,9 +20,9 @@ if review:
     plan: research.plan
 
 # Local in-place work
-if not noGit:
+if vcs_enabled:
   call branch
-    default_branch: sync.default_branch
+    trunk: sync.trunk
 
 call implement
   plan: research.plan
@@ -34,7 +34,7 @@ if not minimal:
 
 call fmt                               # one-shot, no retry pattern
 
-if not noGit:
+if vcs_enabled:
   call commit                          # one-shot
 
 # Structural review fanout (post-implement, on a concrete diff)
@@ -45,7 +45,7 @@ if not minimal:
 call test                              # pattern: check-loop, coverage_check: true
 
 # Forge integration
-call create-pr                         # one-shot; skipped under --no-git or non-github
+call create-pr                         # one-shot; skipped under --no-vcs or non-github
 
 call ci                                # pattern: check-loop, flaky_classification: true
                                        # max_attempts: 5 real, flaky_budget: 3
@@ -61,7 +61,7 @@ call done                              # one-shot; emits timing table + status
 Read each node for its full rationale. The high-level reasoning:
 
 - **Cheap gates first** (check before docs before fmt) — fail fast on broken code before any downstream node does work over it. `check` is typically `tsc --noEmit` or `cargo check` or `cabal build`, which is the cheapest verification in the pipeline.
-- **commit before hickey-lowy** — reviewers operate on a real diff (`git diff origin/HEAD...HEAD`), not a plan. Reviewing a plan tends to surface generic concerns; reviewing a real diff surfaces the specific interleavings and boundary misalignments that matter.
+- **commit before hickey-lowy** — reviewers operate on a real diff (`vcs diff-against-base`), not a plan. Reviewing a plan tends to surface generic concerns; reviewing a real diff surfaces the specific interleavings and boundary misalignments that matter.
 - **fmt before commit** — the primary feature commit should land already-formatted; downstream `hickey-lowy` and `police` commits each run `fmt` on their own changes inside the `commit-per-fix` loop.
 - **create-pr before ci** — the draft PR is the canonical home for CI status. Opening it before CI runs means CI checks land directly on the PR, reviewers see the run history as it happens, and a failing CI doesn't leave an orphaned branch with red statuses and no PR to explain them.
 - **evidence after ci passes** — capturing screenshots/benchmarks/transcripts of broken code wastes both the capture work and the reviewer's time.
@@ -101,7 +101,7 @@ A node is `skipped` for one of four reasons. Each reason carries through to `don
 | Reason | Triggered by | Counts toward "completed" |
 |--------|--------------|---------------------------|
 | `--minimal` | caller flag | yes |
-| `--no-git` | caller flag, on git-mutating nodes | yes |
+| `--no-vcs` | caller flag, on VCS-mutating nodes | yes |
 | `non-<forge> forge: <forge>` | sync's forge detection, on PR/CI nodes | yes |
 | `no <command> configured` | nodes that read `.agency/do.md` (check, docs, fmt, test, ci, evidence) | yes |
 

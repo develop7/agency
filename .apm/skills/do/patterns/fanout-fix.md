@@ -23,26 +23,26 @@ Spawn N reviewer sub-agents in parallel, gather a flat list of findings, then ap
 | `disposition_audit` | `["Defer"]` | Forbidden dispositions that get flipped to `"Fix in this PR"` automatically. /do passes `["Defer", "out of scope", "follow-up", "pre-existing", "should be its own change"]` to catch all phrasings. |
 | `commit_prefix_per_lens` | `{}` | Map from lens name → conventional-commit prefix. e.g. `{ hickey: "refactor(hickey)", lowy: "refactor(lowy)" }`. |
 | `comment_under_heading` | `null` | Optional markdown heading. When set and `forge == github`, post a flat findings table + per-lens rationale to the PR under this heading. |
-| `noGit` | `false` | When `true`, apply each finding to the working tree but skip fmt/commit/push entirely. |
+| `vcs_enabled` | `true` | When `false`, apply each finding to the working tree but skip fmt/commit/push entirely. |
 
 ## Requires
 
-- `diff`: scope to review (typically `git diff origin/HEAD...HEAD`)
+- `diff`: scope to review (pre-computed by main agent via `vcs diff-against-base`)
 - `task_context`: the original task prompt + research findings (sub-agents do not inherit the calling agent's context)
 
 ## Ensures
 
 - `findings_table`: flat list of all findings with their final dispositions (after audit)
-- `commits_added`: count of new commits on the feature branch (zero under `noGit`)
+- `commits_added`: count of new commits on the feature branch (zero when `vcs_enabled` is `false`)
 - `comment_url`: PR comment URL when `comment_under_heading` is set, `forge == github`, and findings posted
 
 ## Invariants
 
 - **Reviewers run in parallel.** Single assistant turn with N parallel `Agent` tool_use blocks. Sequential reviewer invocations are a regression — one reviewer at a time blocks the second's start time on the first's full output.
 - **No Defer disposition survives the audit.** Every finding is either `Fix in this PR` or `No-op`. If a sub-agent emitted `Defer #N` / `out of scope` / `follow-up` / `pre-existing` / `should be its own change`, the audit flips it to `Fix in this PR` unconditionally. /do is not optimizing for minimal diff — it is optimizing for the simpler artifact landing in `master`.
-- **One commit per Fix finding.** Never batched. PR history reads as a sequence of structural refinements, not an opaque "review pass" commit covering 8 unrelated things. Under `noGit`, the equivalent is "one discrete edit per finding to the working tree" — the user reviews the combined delta.
+- **One commit per Fix finding.** Never batched. PR history reads as a sequence of structural refinements, not an opaque "review pass" commit covering 8 unrelated things. When `vcs_enabled` is `false`, the equivalent is "one discrete edit per finding to the working tree" — the user reviews the combined delta.
 - **`No-op` is narrow.** It survives without code action only when the diff already deletes the offending code, or the finding is verbatim-subsumed by another entry in the same review. Anything resembling deferred-work-for-later is a Fix, not a No-op.
-- **Sub-agent prompts must be self-contained.** Sub-agents do not inherit context. The prompt includes the full task prompt, relevant research findings (file paths, intended approach, key constraints), and the diff scope (`git diff origin/HEAD...HEAD`). The sub-agent already knows to read its skill file — don't re-state the methodology.
+- **Sub-agent prompts must be self-contained.** Sub-agents do not inherit context. The prompt includes the full task prompt, relevant research findings (file paths, intended approach, key constraints), and the pre-computed diff scope (`diff_scope` and `changed_files`). The sub-agent already knows to read its skill file — don't re-state the methodology.
 - **Model selection lives in the reviewer skill, not in the pattern.** Both `hickey/SKILL.md` and `lowy/SKILL.md` declare `model: sonnet` in their frontmatter. Don't pass `model:` at the `Agent` tool level — the skill frontmatter is the single source of truth.
 
 ## Delegation
@@ -67,7 +67,7 @@ for finding in all_findings where finding.disposition == "Fix in this PR":
   call applier
     finding: finding
     diff: diff
-  if not noGit:
+  if vcs_enabled:
     call fmt files: applier.files_changed
     call commit-fix
       message: "{commit_prefix_per_lens[finding.lens]}: {finding.label}"

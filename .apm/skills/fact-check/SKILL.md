@@ -14,9 +14,14 @@ Audit code for **correctness and rigor**. This is not a style review — it's a 
 
 Scope comes from `$ARGUMENTS`:
 
-- `branch` (default when `$ARGUMENTS` is empty) — audit only changes in the current branch/PR. Use `git diff main...HEAD` (or the appropriate base branch) to identify changed files and limit all subsequent steps to those files.
+- `branch` (default when `$ARGUMENTS` is empty) — audit only changes in the current branch/PR.
+  - If invoked from `/do` with pre-computed `changed_files` and `diff_scope`, use those parameters directly.
+  - If invoked standalone, auto-detect VCS (`.jj/` vs `.git/`):
+    - For jj: use `jj diff --from main --to @ --name-only` to identify changed files
+    - For git: use `git diff main...HEAD --name-only` (or the appropriate base branch) to identify changed files
+  - Limit all subsequent steps to the identified files.
 - `all` — audit the whole codebase.
-- Anything else — treat the argument as the target itself (a file path, a diff range like `origin/main...HEAD`, or inline text/output to audit, e.g. when invoked by `hickey` to audit its own evaluation). Limit the audit to that target.
+- Anything else — treat the argument as the target itself (a file path, a diff range, or inline text/output to audit, e.g. when invoked by `hickey` to audit its own evaluation). Limit the audit to that target.
 
 Do **not** use `AskUserQuestion`. This skill runs in a fork and is routinely invoked autonomously (e.g. from `/do` via `hickey`).
 

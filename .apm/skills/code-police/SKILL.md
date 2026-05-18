@@ -5,7 +5,9 @@ description: Review code for quality, simplicity, and common mistakes before dec
 
 # Code Police
 
-Review the current changes (scoped to the current branch/PR) against the rules below **plus any additional rules from the project**, then run three passes in order.
+Review the current changes against the rules below **plus any additional rules from the project**, then run three passes in order.
+
+When invoked from `/do`, accept `changed_files` and `diff_scope` parameters and use them directly rather than running VCS commands. When invoked standalone, auto-detect VCS (`.jj/` vs `.git/`) and use the appropriate diff command.
 
 ## Project rules
 
@@ -101,7 +103,7 @@ For each finding: file, line, one-line risk, concrete fix. If no issues, say so 
 
 ## Pass 3: Elegance
 
-**Skip on tiny diffs.** Run `git diff origin/HEAD...HEAD --shortstat` (or the appropriate base-branch ref). If the diff is **under 10 lines**, skip this pass and report `Elegance | 0 | Skipped (tiny diff)` in the summary. The elegance pass's three-lens fan-out has overhead that's disproportionate to a few-line change; rules and fact-check still run. If the diff exceeds the threshold, proceed below.
+**Skip on tiny diffs.** If invoked from `/do` with pre-computed `diff_scope`, use its length. Otherwise, auto-detect VCS (`.jj/` vs `.git/`) and run the appropriate diff command (`jj diff --from main --to @ --shortstat` or `git diff origin/HEAD...HEAD --shortstat`). If the diff is **under 10 lines**, skip this pass and report `Elegance | 0 | Skipped (tiny diff)` in the summary. The elegance pass's three-lens fan-out has overhead that's disproportionate to a few-line change; rules and fact-check still run. If the diff exceeds the threshold, proceed below.
 
 Review the changes for elegance and simplicity.
 

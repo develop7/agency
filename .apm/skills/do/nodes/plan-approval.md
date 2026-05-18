@@ -22,7 +22,7 @@ Pause for user plan approval. Conditional — runs only when the caller passed `
 - **High-level plan**: what to do and why, not implementation details. Include an **Architecture section** (affected modules, new abstractions, ripple effects).
 - **Split non-trivial plans into phases** — MVP first, each phase functionally self-sufficient.
 - Use `EnterPlanMode` to enter plan-mode, present the plan, and `ExitPlanMode` to exit.
-- Once approved, continue autonomously to **branch** (or **implement** under `--no-git`).
+- Once approved, continue autonomously to **branch** (or **implement** under `--no-vcs`).
 
 ## Why no review on the diff later
 

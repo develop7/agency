@@ -9,34 +9,34 @@ Create the primary feature commit and push the branch. One-shot.
 
 ## Requires
 
-- `noGit` — caller flag
+- `vcs_enabled` — caller flag
 - `branch` — from sync (current) or branch (new feature branch)
 
 ## Ensures
 
-- `primary_commit_sha` — git sha of the new commit (absent under `noGit`)
-- (side effect) feature branch pushed to remote with `git push -u origin <branch>`
+- `primary_commit_rev` — revision id of the new commit (absent when `vcs_enabled` is `false`)
+- (side effect) feature branch pushed to remote with `vcs push`
 
 ## Strategies
 
-- **If `noGit`**: skip with `status="skipped"` and `reason="--no-git"`. Move to **hickey-lowy**. The working-tree changes stay uncommitted — that is the point.
-- Otherwise: create a NEW commit (never amend) with a conventional commit message for the primary implementation. Push to the feature branch with `git push -u origin <branch>` (the `-u` sets upstream on first push).
+- **If `vcs_enabled` is `false`**: skip with `status="skipped"` and `reason="--no-vcs"`. Move to **hickey-lowy**. The working-tree changes stay uncommitted — that is the point.
+- Otherwise: create a NEW commit (never amend) with a conventional commit message for the primary implementation. Push to the feature branch with `vcs push`.
 - This is the **primary feature commit**. Downstream **hickey-lowy** and **police** nodes produce their own follow-up commits — one per finding or violation addressed — which keeps the PR history a readable progression of "what was built, then what was refined" rather than a single opaque squash.
 
 ## Receipt
 
 ```
 .../skills/do/scripts/do-results step-start commit
-# under noGit, immediately:
-.../skills/do/scripts/do-results step-end skipped "no commit; working tree unchanged" "--no-git"
+# under vcs_enabled == false, immediately:
+.../skills/do/scripts/do-results step-end skipped "no commit; working tree unchanged" "--no-vcs"
 # otherwise, after committing + pushing:
-.../skills/do/scripts/do-results step-end passed "primary commit <sha> pushed to origin/<branch>"
+.../skills/do/scripts/do-results step-end passed "primary commit <rev> pushed to origin/<branch>"
 ```
 
 ## Verify
 
-- Under `noGit`: skipped, no git operations performed.
-- Otherwise: `git log -1` shows a new commit on the feature branch, and it's pushed to remote (verify via `git rev-parse origin/<branch>` matching local HEAD).
+- Under `vcs_enabled == false`: skipped, no VCS operations performed.
+- Otherwise: `vcs commits-since-base` shows a new commit on the feature branch, and it's pushed to remote (verify via `vcs current-revision` matching the remote).
 
 ## Errors
 

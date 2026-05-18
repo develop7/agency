@@ -6,27 +6,30 @@ Adapting OpenProse's workspace/bindings boundary: each node has private scratch 
 
 | Binding | Producer | Consumers | Notes |
 |---------|----------|-----------|-------|
-| `noGit` | caller flag, sync stashes via `do-results set` | branch, commit, hickey-lowy, police, create-pr, ci, evidence, done | bool |
+| `vcs_enabled` | caller flag, sync stashes via `do-results set` | branch, commit, hickey-lowy, police, create-pr, ci, evidence, done | bool; `false` when `--no-vcs` passed |
+| `vcs_backend` | sync (auto-detect) | all nodes that run VCS commands | `git` / `jj` |
 | `minimal` | caller flag | docs, hickey-lowy, police, evidence | bool |
 | `review` | caller flag | research (controls plan-approval pause) | bool |
 | `forge` | sync (script's stdout) | branch, commit, create-pr, ci, evidence, done | `github` / `bitbucket` / `unknown` |
 | `branch` | sync (current), branch (new feature branch) | commit, create-pr | string |
-| `default_branch` | sync | branch, hickey-lowy, police, test, ci | `master` / `main` |
+| `trunk` | sync | branch, hickey-lowy, police, test, ci | `master` / `main` |
 | `task` | caller arg | research | the prompt or issue URL |
 | `research.plan` | research | plan-approval, implement | structured plan + file:line citations |
 | `research.map` | research | implement (referenced rather than re-read) | file:line index from Explore subagent |
-| `primary_commit_sha` | commit | hickey-lowy, police | git sha; absent under `noGit` |
+| `primary_commit_rev` | commit | hickey-lowy, police | revision id; absent when `vcs_enabled` is `false` |
 | `review_findings` | hickey-lowy | create-pr (posted as PR comment) | structured table; may be empty |
-| `pr_url` | create-pr | ci, evidence, done | string; absent under `noGit` or non-github forge |
-| `ci_run_sha` | ci | done | git sha CI ran against |
+| `pr_url` | create-pr | ci, evidence, done | string; absent when `vcs_enabled` is `false` or non-github forge |
+| `ci_run_rev` | ci | done | revision CI ran against |
 | `timing_table` | done (via `scripts/steps/done`) | terminal, PR comment | markdown table |
+| `changed_files` | main agent (pre-computed) | sub-agents (hickey, lowy, code-police, etc.) | list of paths changed since trunk |
+| `diff_scope` | main agent (pre-computed) | sub-agents (hickey, lowy, code-police, etc.) | full diff text against trunk |
 
 ## What is NOT a binding
 
 These are durable but not bindings — they're side effects on shared state. Downstream nodes read them from the world, not from a binding:
 
-- **Git tree state** — implement, hickey-lowy, police, test all mutate it. `git diff origin/HEAD...HEAD` is the canonical query.
-- **Pushed commits** — commit, hickey-lowy, police, test all push. `git log origin/HEAD..HEAD` is the canonical query.
+- **Working tree state** — implement, hickey-lowy, police, test all mutate it. The canonical query is via the VCS script: `vcs diff-against-base`.
+- **Pushed commits** — commit, hickey-lowy, police, test all push. The canonical query is via the VCS script: `vcs commits-since-base`.
 - **GitHub PR state** — create-pr opens the draft, hickey-lowy posts the analysis comment, evidence posts the evidence comment, done posts the status comment. `gh pr view` is the canonical query.
 - **CI status** — ci writes statuses to GitHub. `gh pr checks` (or equivalent) is the canonical query.
 - **`.do-results.json`** — the receipt envelope. Treat as write-only from per-node code; use the script API, don't read the file directly.
@@ -37,7 +40,7 @@ Anything not in the bindings table above is scratch. Examples:
 
 - **Sub-agent transcripts.** When `hickey-lowy` spawns hickey + lowy as parallel sub-agents, only the structured `findings` cross back. The internal reasoning, file dumps, and intermediate edits the sub-agents made stay in their sessions.
 - **Mid-step retry attempts.** `check-loop`'s intermediate runner outputs (e.g. the second-to-last failing tsc output) are scratch — only the final verdict crosses.
-- **File reads done for verification.** `git diff --name-only` to count changed files; `gh pr view` to confirm a comment posted. The values are queried, used for a local decision, and discarded.
+- **File reads done for verification.** `vcs files-changed` to count changed files; `gh pr view` to confirm a comment posted. The values are queried, used for a local decision, and discarded.
 - **Tool outputs from research.** Files Explore reads internally are scratch; the file:line *map* it returns crosses as `research.map`.
 
 ## Why this boundary matters
@@ -57,7 +60,8 @@ The do-results JSON tracks workflow state independently of bindings. Its top-lev
 | `active` | /do | `set active <working\|waiting\|false>` |
 | `status` | /do | `set status <completed\|failed>` (set by `done`) |
 | `forge` | /do | `set forge <value>` (set by `sync`) |
-| `noGit` | /do | `set noGit <value>` (set by `sync`) |
+| `vcs_enabled` | /do | `set vcs_enabled <true|false>` (set by `sync`) |
+| `vcs_backend` | /do | `set vcs_backend <git|jj>` (set by `sync`) |
 | `steps[]` | do-results script | `step-start` / `step-end` / `step` |
 
 Each step record has: `name`, `status`, `verification`, `startedAt`, `completedAt`, optional `reason`.

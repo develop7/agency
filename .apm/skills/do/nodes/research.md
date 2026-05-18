@@ -47,4 +47,4 @@ Can articulate what needs to change, where, and why, with file:line citations dr
 
 ## Then
 
-If `review`, the next node is [`plan-approval`](plan-approval.md). Otherwise, the next node is [`branch`](branch.md) (or [`implement`](implement.md) under `--no-git`).
+If `review`, the next node is [`plan-approval`](plan-approval.md). Otherwise, the next node is [`branch`](branch.md) (or [`implement`](implement.md) under `--no-vcs`).

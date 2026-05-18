@@ -1,12 +1,12 @@
 ---
 name: do
 description: Do a task end-to-end — implement, PR, CI loop, ship. ONLY invoke when the user explicitly types `/do` or `$do`; never auto-select from a natural-language request, even one that sounds like an end-to-end task.
-argument-hint: "<issue-url | prompt> [--review] [--no-git] [--minimal] [--from <step>]"
+argument-hint: "<issue-url | prompt> [--review] [--no-vcs] [--minimal] [--from <step>]"
 ---
 
 # Do Workflow
 
-Take a task and do it top-to-bottom: research, branch, implement, pass CI, open a PR, and ship. (Under `--no-git`, extend the working tree in place — no branch, commit, or PR.)
+Take a task and do it top-to-bottom: research, branch, implement, pass CI, open a PR, and ship. (Under `--no-vcs`, extend the working tree in place — no branch, commit, or PR.)
 
 **Mostly autonomous.** Do NOT use `AskUserQuestion` at any point (except during the `--review` planning pause). Make sensible default choices and keep moving. If the user wants to skip specific steps, they can say so in the prompt — honor it.
 
@@ -60,7 +60,7 @@ Unknown `###` sections are documentation; only the names above are load-bearing.
 2. Read [`execution.md`](execution.md) for the pinned order, conditional branches, and entry points.
 3. Read [`workspace.md`](workspace.md) for the bindings that cross between nodes — **only these survive the boundary**; per-node scratch (sub-agent transcripts, mid-step retry attempts, file reads done for verification) does not.
 4. Seed the TaskCreate checklist (see [Progress tracking](#progress-tracking)).
-5. Initialize results: `.../scripts/do-results init`, then stash the caller flags (`set forge ...`, `set noGit ...`).
+5. Initialize results: `.../scripts/do-results init`, then stash the caller flags (`set forge ...`, `set vcs_enabled ...`, `set vcs_backend ...`).
 6. For each node in order:
    - Read `nodes/<name>.md`.
    - If the node has a `### Pattern` section, also read `patterns/<pattern-name>.md` and embody the pattern with the slot bindings.
@@ -69,12 +69,15 @@ Unknown `###` sections are documentation; only the names above are load-bearing.
 
 ## Arguments
 
-Parse the arguments string: `[--review] [--no-git] [--minimal] [--from <step-id>] <task description or issue-url>`
+Parse the arguments string: `[--review] [--no-vcs] [--no-git] [--minimal] [--from <step-id>] <task description or issue-url>`
 
 The workflow is **forge-aware**: it auto-detects whether the repo lives on GitHub or elsewhere during the **sync** node. Only GitHub has an active code path today — Bitbucket/other forges gracefully skip PR-related steps. Tracking: [srid/agency#10](https://github.com/srid/agency/issues/10).
 
+The workflow is **VCS-aware**: it auto-detects whether the repo uses Git or Jujutsu during the **sync** node.
+
 - `--review`: Pause after **research** for user plan approval via `EnterPlanMode`/`ExitPlanMode`, then continue autonomously.
-- `--no-git`: Extend the working tree **in place** — do not create a branch, commit, push, or touch any PR. Research, implement, check, docs, police, fmt, hickey-lowy, and test all run; git-mutating nodes (**branch**, **commit**, **create-pr**) skip.
+- `--no-vcs`: Extend the working tree **in place** — do not create a branch, commit, push, or touch any PR. Research, implement, check, docs, police, fmt, hickey-lowy, and test all run; VCS-mutating nodes (**branch**, **commit**, **create-pr**) skip.
+- `--no-git`: **Deprecated alias for `--no-vcs`.** Retained for backwards compatibility.
 - `--minimal`: Skip the nodes whose value is disproportionate on trivially-scoped diffs: **docs**, **hickey-lowy**, **police**, and **evidence**. Use this for one-line bug fixes, typos, config tweaks. The four skipped nodes record `status="skipped"` with `reason="--minimal"`.
 - `--from <step-id>`: Start from a specific node. See [`execution.md`](execution.md) for entry points.
 
@@ -86,14 +89,15 @@ Every node is bookended by two `scripts/do-results` calls: `step-start <name>` b
 
 **Lifecycle the script tracks intrinsically**:
 
-- Node `status` — `passed`, `failed`, or `skipped`. A `skipped` node must include a `reason` (e.g. `"non-github forge: bitbucket"`, `"--no-git"`, `"--minimal"`, `"no check command configured"`).
+- Node `status` — `passed`, `failed`, or `skipped`. A `skipped` node must include a `reason` (e.g. `"non-github forge: bitbucket"`, `"--no-vcs"`, `"--minimal"`, `"no check command configured"`).
 - `active` — state enum (not a boolean). Set to `working` when the workflow starts (**sync**), `waiting` when the agent is idle waiting for an external process (e.g. background CI), back to `working` when that process returns, and `false` when **done** is reached. The stop hook uses this: `working` blocks exits; `waiting` and `false` allow them.
 - Workflow `status` — `completed` when **done** finishes, `failed` if halted. Informational.
 
 **Workflow fields /do also stashes via `set`** (the script doesn't interpret these — it just remembers them):
 
 - `forge` — `github`, `bitbucket`, or `unknown`. Populated by `scripts/steps/sync` after forge detection.
-- `noGit` — `true` or `false`. Reflects the `--no-git` flag.
+- `vcs_enabled` — `true` or `false`. Reflects the `--no-vcs` flag (inverted: `false` when `--no-vcs` is passed).
+- `vcs_backend` — `git` or `jj`. Auto-detected by `scripts/steps/sync`.
 
 **Commands** (invoke with the full path, e.g. `.../skills/do/scripts/do-results ...`):
 
@@ -119,7 +123,7 @@ sync, research, branch, implement, check, docs, fmt, commit, hickey-lowy, police
 
 **Emit all `TaskCreate` calls as parallel `tool_use` blocks in a single assistant turn** — one model round-trip, not one per task. The seeded nodes have no dependencies declared in TaskCreate (the dependency model lives in `execution.md`), so there is nothing to serialize on. Sequential seeding (15 round-trips before any real work) is a regression: it adds latency and clutters the transcript.
 
-**Under `--minimal`, omit the four nodes the flag skips** (`docs`, `hickey-lowy`, `police`, `evidence`) from the seeded list — the user explicitly opted out, so they shouldn't clutter the human-facing checklist. The seeded list becomes 11 items in `--minimal` runs. (Run-inherent skips like `--no-git` and forge skips stay in the list — see Skipped nodes below.)
+**Under `--minimal`, omit the four nodes the flag skips** (`docs`, `hickey-lowy`, `police`, `evidence`) from the seeded list — the user explicitly opted out, so they shouldn't clutter the human-facing checklist. The seeded list becomes 11 items in `--minimal` runs. (Run-inherent skips like `--no-vcs` and forge skips stay in the list — see Skipped nodes below.)
 
 The `scripts/do-results` lifecycle still records `--minimal`-skipped nodes with `status="skipped"` and `reason="--minimal"` via back-to-back `step-start` / `step-end` calls — that's what keeps the final timing table and `completed`-status logic correct. The task UI is independent of that recording.
 
@@ -130,20 +134,20 @@ Rules:
 - **Flip to `in_progress` when a node starts, `completed` when it verifies.** One node `in_progress` at a time.
 - **Retries stay `in_progress`.** If `check`, `test`, `ci`, or `docs` loop through their retry budget, do **not** bounce the task state back to `pending` or flicker it — leave it `in_progress` until the node finally verifies (or retries exhaust and the workflow fails).
 - **`--from <step>` entry points**: still seed the full list (minus any `--minimal` omissions). Mark nodes earlier than the entry point as `completed` immediately after seeding.
-- **Skipped nodes that stay in the list** (e.g. `branch`/`commit`/`create-pr` under `--no-git`, or PR steps on non-GitHub forges) go straight to `completed`. Record the skip with a back-to-back `do-results step-start` / `step-end skipped ... "<reason>"`.
+- **Skipped nodes that stay in the list** (e.g. `branch`/`commit`/`create-pr` under `--no-vcs`, or PR steps on non-GitHub forges) go straight to `completed`. Record the skip with a back-to-back `do-results step-start` / `step-end skipped ... "<reason>"`.
 - **Failure**: if retries exhaust and the workflow halts, leave the failing node `in_progress`, mark `done` `completed` after the failure summary is written, and run `scripts/do-results set status failed`.
 
 ## Invariants (workflow-wide)
 
 These hold regardless of which nodes are running:
 
-- **Never skip nodes** unless skipped by `--no-git`, forge detection, `--minimal`, or — for **evidence** — the project hasn't filled in a `## PR evidence` section in `.agency/do.md`. Run them in order from entry point to **done**.
+- **Never skip nodes** unless skipped by `--no-vcs`, forge detection, `--minimal`, or — for **evidence** — the project hasn't filled in a `## PR evidence` section in `.agency/do.md`. Run them in order from entry point to **done**.
 - **Every commit is NEW.** Never amend, rebase, or force-push.
-- **Feature branches only.** Never commit to master/main. (Under `--no-git`, no commits happen at all, so this is moot.)
+- **Feature branches only.** Never commit to master/main. (Under `--no-vcs`, no commits happen at all, so this is moot.)
 - **Background for CI.** Run CI with `run_in_background: true`.
 - **No questions.** Don't use `AskUserQuestion` outside the `--review` plan pause.
 - **Never stop between nodes.** After completing a node, immediately proceed to the next one.
-- **Complete the full workflow.** Implementing code is one node of many. The task is not done until a PR URL (GitHub), a pushed branch name (non-GitHub), or a working-tree summary (`--no-git`) is reported.
+- **Complete the full workflow.** Implementing code is one node of many. The task is not done until a PR URL (GitHub), a pushed branch name (non-GitHub), or a working-tree summary (`--no-vcs`) is reported.
 - **Exhausted retries = halt.** If `ci` or `test` retries are exhausted, set status to `"failed"` and skip to **done**. On `ci` failure the draft PR (opened in the preceding **create-pr** node) stays open as the record of the failed attempt — do not close, undraft, or otherwise mutate it.
 - **No Defer disposition.** The hickey-lowy node and the `fanout-fix` pattern's disposition audit flip any deferred-work-for-later finding to "Fix in this PR". The only way out of a finding is through it.
 

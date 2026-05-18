@@ -25,16 +25,16 @@ A specialization of [worker-critic](worker-critic.md) for verification-driven re
 | `flaky_budget` | `0` | Re-runs allowed without fixing. Only meaningful when `flaky_classification: true`. |
 | `loop_artifacts` | `none` | `none`: fixes stay in the working tree only. `commit-per-fix`: each fix that lands real changes is followed by `fmt` + `commit` + `push`, with one commit per discrete fix. |
 | `coverage_check` | `false` | When `true`, after `verdict == pass` the runner must also confirm the changed code paths were exercised. A green run on stale code does not satisfy verification. |
-| `rerun_on_new_commit` | `false` | When `true`, before recording `pass` the pattern compares the SHA the runner ran against to current `HEAD`. If they differ, re-runs against current `HEAD`. |
+| `rerun_on_new_commit` | `false` | When `true`, before recording `pass` the pattern compares the revision the runner ran against to current revision. If they differ, re-runs against current revision. |
 
 ## Requires
 
-- `target`: what's being verified (typically the just-implemented diff, scoped via `git diff origin/HEAD...HEAD --name-only`)
+- `target`: what's being verified (typically the just-implemented diff, scoped via `vcs files-changed`)
 
 ## Ensures
 
 - `verdict`: one of:
-  - `pass` — runner returned success and (if applicable) coverage / SHA checks passed
+  - `pass` — runner returned success and (if applicable) coverage / revision checks passed
   - `failed-after-budget` — exhausted retries; surrounding workflow halts with `status=failed`
   - `no-command-configured` — runner reports the project hasn't configured this gate; treated as `skipped` by the surrounding node
 
@@ -44,7 +44,7 @@ A specialization of [worker-critic](worker-critic.md) for verification-driven re
 - On `failed-after-budget`, the surrounding workflow halts (the surrounding node reports `step-end failed`). The pattern does not silently pass.
 - `flaky` re-runs do not consume the `max_attempts` budget; only real failures do. The two budgets are independent.
 - Under `loop_artifacts: commit-per-fix`, each fix is its own commit (never batched). PR history reads as a sequence of discrete fixes, not a grab-bag diff.
-- Under `loop_artifacts: commit-per-fix` AND `noGit: true`: fixes go to the working tree but commit/push are skipped. The user reviews the combined working-tree delta themselves.
+- Under `loop_artifacts: commit-per-fix` AND `vcs_enabled: false`: fixes go to the working tree but commit/push are skipped. The user reviews the combined working-tree delta themselves.
 
 ## Delegation
 
@@ -60,8 +60,8 @@ loop:
     return { verdict: "no-command-configured" }
 
   if verdict == "pass":
-    if rerun_on_new_commit and runner.ran_against_sha != current_head_sha:
-      continue   # re-run against current HEAD; verdict pass on stale code does not satisfy
+    if rerun_on_new_commit and runner.ran_against_rev != current_rev:
+      continue   # re-run against current revision; verdict pass on stale code does not satisfy
     if coverage_check and not runner.coverage_satisfied:
       # treat as a real failure: runner exited 0 but didn't exercise the new behavior
       attempts_real = attempts_real + 1
@@ -70,7 +70,7 @@ loop:
       call fixer
         output: "coverage gap: " + describe_gap()
         target: target
-      if loop_artifacts == "commit-per-fix" and not noGit:
+      if loop_artifacts == "commit-per-fix" and vcs_enabled:
         call fmt files: fixer.files_changed
         call commit-fix message: "test: cover <new behavior>"
       continue
@@ -89,7 +89,7 @@ loop:
   call fixer
     output: output
     target: target
-  if loop_artifacts == "commit-per-fix" and not noGit:
+  if loop_artifacts == "commit-per-fix" and vcs_enabled:
     call fmt files: fixer.files_changed
     call commit-fix message: <one-line summary derived from fixer's change>
     call push
