@@ -37,6 +37,40 @@ Every step is bookended by two `scripts/do-results` calls: `step-start <name>` b
 
 - `forge` — `github`, `bitbucket`, or `unknown`. Populated by `scripts/steps/sync` after forge detection.
 - `noGit` — `true` or `false`. Reflects the `--no-git` flag. Git-mutating steps (**branch**, **commit**, **create-pr**) skip with `reason="--no-git"` when set.
+- `stealth` — `true` or `false`. Populated by `scripts/steps/sync` from `.agency/do.md` frontmatter (`stealth:` key). When set, the workflow follows stealth directives.
+
+**Stealth config split in `.agency/do.md`**:
+
+1. **Structured directives in frontmatter** (parsed by sync and later steps):
+
+```markdown
+---
+stealth:
+  push: skip
+  pr: skip
+  ci: local
+  evidence: skip
+---
+```
+
+2. **Free-form findings policy in `## Stealth mode` section** (human-readable prose, interpreted by the agent):
+
+```markdown
+## Stealth mode
+
+Findings in terminal only. Do not write report files.
+```
+
+Frontmatter keys:
+
+| Key | Values | Default |
+|-----|--------|---------|
+| `stealth.push` | `skip`, `allow` | `skip` |
+| `stealth.pr` | `skip`, `allow` | `skip` |
+| `stealth.ci` | `skip`, `allow`, `local` | `skip` |
+| `stealth.evidence` | `skip`, `allow` | `skip` |
+
+Findings behavior comes from the body section (`## Stealth mode`): `write to <path>`, `terminal`, or `discard` (default: write Markdown files at repo root).
 
 **Commands** (invoke with the full path, e.g. `.../skills/do/scripts/do-results ...`):
 
@@ -200,11 +234,11 @@ If no format command is documented, skip this step with a note.
 
 **If `--no-git`**: Skip with status `skipped` and reason `"--no-git"`. Move to **hickey+lowy**. The working-tree changes stay uncommitted — that is the point.
 
-Create a NEW commit (never amend) with a conventional commit message for the primary implementation. Push to the feature branch with `git push -u origin <branch>` (sets upstream on first push).
+Create a NEW commit (never amend) with a conventional commit message for the primary implementation. Push to the feature branch with `git push -u origin <branch>` (sets upstream on first push), **unless stealth mode is active** — under stealth mode, commits stay local and no push happens.
 
 This is the **primary feature commit**. Downstream **hickey+lowy** and **police** steps produce their own follow-up commits — one per finding or violation addressed — which keeps the PR history a readable progression of "what was built, then what was refined" rather than a single opaque squash.
 
-**Verify**: `git log -1` shows a new commit on the feature branch, and it's pushed to remote.
+**Verify**: `git log -1` shows a new commit on the feature branch. Under stealth mode, the commit is local only (no push). Otherwise, it's pushed to remote.
 
 ---
 
@@ -262,11 +296,13 @@ After the audit (and cross-validation, when run), every finding lands as a commi
 2. Run the project's format command (from **fmt** instructions) on the changed files, if one is configured.
 3. `git add <changed files>` — stage only the files this fix touched.
 4. `git commit -m "refactor(hickey): <short finding label>"` (or `refactor(lowy): …` depending on the lens). The body of the message should restate the finding in one line so the commit is self-explanatory in `git log`.
-5. `git push` — push after each commit so the draft PR (once created) accumulates commits in real time. (The `-u` flag is only needed on the first push, which already happened in **commit**.)
+5. `git push` — push after each commit so the draft PR (once created) accumulates commits in real time. (The `-u` flag is only needed on the first push, which already happened in **commit**.) **Skip push under stealth mode** — commits stay local.
 
-**Under `--no-git`**: Skip the commit/push steps entirely. Apply fixes to the working tree and move on — the user will review the combined working-tree delta themselves. Record the step as passed with verification noting "--no-git: fixes applied to working tree, not committed."
+**Write findings.** After all fixes are applied, write a Markdown findings report per the `## Stealth mode` section in `.agency/do.md`. If the section specifies a path, write there. If it says `terminal`, print to the terminal only. If silent on findings, default to writing Markdown files at the repo root: `hickey.md`, `lowy.md`. Format each file with a `## <Lens> Findings` header, then a table of findings with columns: `#`, `Finding`, `Disposition`, `Commit SHA`. Include the full rationale prose below the table. If both lenses produced zero findings, write a one-line "No findings" instead of an empty table.
 
-**Verify**: Both hickey and lowy produced review output using their respective skills, either through sub-agents or the main-model fallback. Cross-validation ran (or was correctly skipped because both reviewers returned zero findings). Every finding — first-pass or cross-validation — has an action recorded, either **Fix in this PR** or **No-op** (no defers; if the sub-agent emitted one, the audit step above flipped it to Fix in this PR). Every "Fix in this PR" finding has a corresponding commit on the feature branch (check via `git log origin/HEAD..HEAD --oneline`), except under `--no-git`. No unactioned findings; no deferred findings.
+**Under `--no-git`**: Skip the commit/push steps entirely. Apply fixes to the working tree and move on — the user will review the combined working-tree delta themselves. Record the step as passed with verification noting "--no-git: fixes applied to working tree, not committed." Still write the findings files per config.
+
+**Verify**: Both hickey and lowy produced review output using their respective skills, either through sub-agents or the main-model fallback. Cross-validation ran (or was correctly skipped because both reviewers returned zero findings). Every finding — first-pass or cross-validation — has an action recorded, either **Fix in this PR** or **No-op** (no defers; if the sub-agent emitted one, the audit step above flipped it to Fix in this PR). Every "Fix in this PR" finding has a corresponding commit on the feature branch (check via `git log origin/HEAD..HEAD --oneline`), except under `--no-git`. No unactioned findings; no deferred findings. Findings written per `## Stealth mode` config.
 
 ---
 
@@ -291,13 +327,15 @@ For each violation reported by `/code-police` (across all three passes), in turn
    - Rules pass: `fix(police): <rule-id> — <short description>` (e.g. `fix(police): no-dead-code — remove commented-out fallback`)
    - Fact-check pass: `fix(police): fact-check — <short description>` (e.g. `fix(police): fact-check — propagate error from loader`)
    - Elegance pass (`/simplify`-applied or inline-loop-applied): `refactor(police): elegance — <short description>`
-5. `git push`.
+5. `git push`. **Skip push under stealth mode** — commits stay local.
 
 For the elegance pass specifically: `/simplify` applies fixes in batches across three lenses (reuse, quality, efficiency). Commit each distinct refactor as a separate commit — do not roll them into one "elegance" commit. If a lens produces multiple independent changes (two reuse-via-helper refactors in different files, say), those are separate commits too.
 
-**Under `--no-git`**: Skip the commit/push steps. Apply fixes to the working tree and continue. The user reviews the combined delta.
+**Write findings.** After all violations are addressed (or if none found), write a Markdown report per the `## Stealth mode` section in `.agency/do.md`. If the section specifies a path, write there. If it says `terminal`, print to the terminal only. If silent on findings, default to writing `police.md` at the repo root. Format with a `## Code Police Findings` header, then three subsections: `### Rules`, `### Fact-Check`, `### Elegance`. Under each, list violations found and fixed (or "All clear"). Include commit SHAs for each fix.
 
-**Verify**: All 3 passes clean ("All clear"). Under `--no-git`, the tree reflects the fixes; otherwise `git log origin/HEAD..HEAD --oneline` shows one commit per violation addressed.
+**Under `--no-git`**: Skip the commit/push steps. Apply fixes to the working tree and continue. The user reviews the combined delta. Still write the findings file per config.
+
+**Verify**: All 3 passes clean ("All clear"). Under `--no-git`, the tree reflects the fixes; otherwise `git log origin/HEAD..HEAD --oneline` shows one commit per violation addressed. Findings written per `## Stealth mode` config.
 **If violations found** (max 3 attempts): Fix the violations (one commit per fix, as above) and re-invoke `/code-police`.
 
 ---
@@ -318,6 +356,8 @@ If changes are purely internal with no user-facing impact, unit tests may suffic
 ---
 
 ### create-pr
+
+**If `stealth == true`**: Skip with status `skipped` and reason `"stealth mode"`. There is no PR to create — commits stay local, findings are per config. Proceed to **ci** (which will also skip per config).
 
 **If `--no-git`**: Skip with status `skipped` and reason `"--no-git"`. There is no PR to create. Proceed to **ci**.
 
@@ -367,6 +407,8 @@ Re-check the PR title/body against current scope. If scope changed, update via `
 
 ### ci
 
+**If `stealth == true`**: Skip with status `skipped` and reason `"stealth mode"`. There is no PR for CI to land on. Proceed to **evidence** (which will also skip under stealth mode).
+
 Read `.agency/do.md` and look for a `## CI command` section, plus any verification method documented there. Run CI with `run_in_background: true` if the command takes more than a few seconds.
 
 **Never pipe CI to `tail`/`head`**, and **never append `2>&1`** — background mode captures both streams.
@@ -390,6 +432,8 @@ CI commands are typically local (e.g. `nix flake check`, `just ci`, `make ci`) a
 ### evidence
 
 **Opt-in step.** Most projects skip this. The step exists so projects with empirical "did the feature actually work" needs — UI screenshots, performance benchmarks, demo recordings, output transcripts — can attach that evidence to the PR without baking the mechanism into agency.
+
+**If `stealth == true`**: Skip with status `skipped` and reason `"stealth mode"`. There is no PR to attach evidence to. Move to **done**.
 
 **If `--minimal`**: Skip with status `skipped` and reason `"--minimal"`. Move to **done**.
 
@@ -430,12 +474,13 @@ Embed image/asset URLs inline in the markdown — `gh pr comment` itself cannot 
 
 Present a summary of all steps with their verification status. If any step has a non-success status, retry it (max 3 attempts from done). If still failing after retries, set `status: "failed"`.
 
-`"completed"` requires **all steps `passed`**, with four exceptions that count toward completion:
+`"completed"` requires **all steps `passed`**, with five exceptions that count toward completion:
 
 1. A step `skipped` with `reason` beginning `"non-<forge> forge:"` (detected forge isn't GitHub).
 2. A step `skipped` with `reason` `"--no-git"` (user opted out of git operations).
 3. A step `skipped` with `reason` `"no PR evidence section in .agency/do.md"` (project hasn't opted into the evidence step — this is the default).
 4. A step `skipped` with `reason` `"--minimal"` (user opted out of structural review / docs / quality gate / evidence on a trivial diff).
+5. A step `skipped` with `reason` `"stealth mode"` (project configured for stealth — no PR, no CI, no evidence).
 
 A `failed` step always blocks `"completed"`. No redefining "passed," no footnote caveats. Update via `scripts/do-results set status completed` or `scripts/do-results set status failed` accordingly.
 
@@ -463,6 +508,8 @@ Read the `FACTS` block the `done` script emitted and generate 2–4 concrete sug
 Be specific to this run's data, not generic advice.
 
 #### PR comment & wrap-up
+
+**If `stealth == true`**: There is no PR to report against. Print the timing table, optimization suggestions, and findings summary to the terminal. Print the branch name and local commit count (`git log origin/HEAD..HEAD --oneline | wc -l`). If findings were written to files per config, list them. Remind the user that changes are on a local branch — the push/PR steps are theirs to run. Do **not** attempt to post any PR comment.
 
 **If `--no-git`**: There is no branch or PR to report against. Print the timing table and optimization suggestions to the terminal only. List the files modified in the working tree (`git status --porcelain`) so the user can see what the agent touched. Remind the user that changes are uncommitted — the commit/push/PR steps are theirs to run.
 

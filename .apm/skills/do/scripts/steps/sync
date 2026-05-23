@@ -60,8 +60,51 @@ esac
 "$DO_RESULTS" init >/dev/null
 "$DO_RESULTS" set forge "$forge" >/dev/null
 "$DO_RESULTS" set noGit "$noGit" >/dev/null
+
+# Detect stealth mode from .agency/do.md frontmatter.
+#
+# Supported markers:
+#   ---
+#   stealth: true
+#   ---
+#
+#   ---
+#   stealth:
+#     push: skip
+#   ---
+#
+# If `stealth: false` is set explicitly, stealth mode is disabled.
+stealth="false"
+if [ -f ".agency/do.md" ]; then
+  if [ "$(sed -n '1p' ".agency/do.md")" = "---" ]; then
+    frontmatter="$(awk 'NR==1 && $0=="---" {in_fm=1; next} in_fm && $0=="---" {exit} in_fm {print}' ".agency/do.md")"
+    stealth_line="$(printf '%s\n' "$frontmatter" | grep -E '^[[:space:]]*stealth:[[:space:]]*' | head -n1 || true)"
+    if [ -n "$stealth_line" ]; then
+      stealth_value="$(printf '%s\n' "$stealth_line" | sed -E 's/^[[:space:]]*stealth:[[:space:]]*//')"
+      case "$stealth_value" in
+        false|False|FALSE|no|No|NO|off|Off|OFF)
+          stealth="false"
+          ;;
+        *)
+          stealth="true"
+          ;;
+      esac
+    fi
+  fi
+fi
+"$DO_RESULTS" set stealth "$stealth" >/dev/null
+
+# When stealth mode is active, exclude .do-results.json from VCS via core.excludesFile
+if [ "$stealth" = "true" ]; then
+  excludesFile=".git/agency-excludes"
+  git config core.excludesFile "$excludesFile"
+  if ! grep -qF '.do-results.json' "$excludesFile" 2>/dev/null; then
+    echo '.do-results.json' >> "$excludesFile"
+  fi
+fi
+
 "$DO_RESULTS" step sync passed \
-  "git fetch ok; forge=$forge; noGit=$noGit" \
+  "git fetch ok; forge=$forge; noGit=$noGit; stealth=$stealth" \
   "$startedAt" now >/dev/null
 
 # Emit structured facts the agent uses for downstream steps
@@ -71,3 +114,4 @@ default_ref="$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | s
 echo "forge=$forge"
 echo "branch=$branch"
 echo "defaultBranch=$default_ref"
+echo "stealth=$stealth"
