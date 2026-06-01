@@ -8,13 +8,13 @@ description: Parallel structural review with hickey and lowy sub-agents.
 ## Requires
 
 - `--minimal` flag
-- `--no-git` flag
-- Diff `git diff origin/HEAD...HEAD`
+- `--no-vcs` flag
+- Diff `scripts/vcs-op diff-range <defaultBranch>`
 - Full task prompt + research context
 
 ## Ensures
 
-- Review findings applied as individual commits (or working-tree fixes under --no-git)
+- Review findings applied as individual commits (or working-tree fixes under --no-vcs)
 - Findings ledger for PR comment
 
 ## Pattern
@@ -38,8 +38,8 @@ For maximum efficiency, invoke the `hickey` and `lowy` Agent tools **in parallel
 Each prompt must be self-contained. Brief each one with:
 
 - The full task prompt plus anything relevant that **research** uncovered
-- Scope: the actual diff, `git diff origin/HEAD...HEAD`
-- **Duplication-audit hint**, when the diff adds new files — check with `git diff --diff-filter=A --name-only origin/HEAD...HEAD` and only include the hint if the output is non-empty
+- Scope: the actual diff, `scripts/vcs-op diff-range <defaultBranch>`
+- **Duplication-audit hint**, when the diff adds new files — check with `scripts/vcs-op new-files <defaultBranch>` and only include the hint if the output is non-empty
 
 **Do not seed structural questions.** The implementer's prompt must NOT include pre-formed questions like _"Is module X the right home for function Y?"_
 
@@ -57,10 +57,34 @@ Run the two cross-validation calls in parallel. If either surfaces a new finding
 
 1. Apply the fix narrowly — only the lines that address this specific finding.
 2. Run the project's format command on the changed files, if configured.
-3. `git add <changed files>` — stage only the files this fix touched.
-4. `git commit -m "refactor(hickey): <short finding label>"` (or `refactor(lowy): …`). Body restates the finding in one line.
-5. `git push` — push after each commit.
+3. `.../skills/do/scripts/vcs-op fix-commit "refactor(hickey): <short finding label>"` (or `refactor(lowy): …`). Body restates the finding in one line.
 
-**Under `--no-git`**: Skip commit/push. Apply fixes to working tree.
+**Under `--no-vcs`**: Skip commit/push. Apply fixes to working tree.
 
-**Verify**: Both hickey and lowy produced review output. Cross-validation ran (or skipped because zero findings). Every finding has action recorded: **Fix in this PR** or **No-op**. Every "Fix" has a corresponding commit, except under `--no-git`.
+**Verify**: Both hickey and lowy produced review output. Cross-validation ran (or skipped because zero findings). Every finding has action recorded: **Fix in this PR** or **No-op**. Every "Fix" has a corresponding commit, except under `--no-vcs`.
+
+## Delegation
+
+```prose
+# Phase 1: parallel first-pass
+spawn hickey(diff, task, context) and lowy(diff, task, context) in parallel
+await both
+merge all findings
+
+# Phase 2: cross-validation (if at least two reviewers found something)
+if cross_validate and both reviewers produced findings:
+  for each reviewer that produced findings:
+    spawn that reviewer again with diff + other reviewer's findings
+    ask: "Does any recommendation create a problem your lens would flag?"
+  await both cross-validation calls
+  merge new findings
+
+# Phase 3: apply fixes
+for each finding with disposition "Fix in this PR":
+  apply the fix narrowly
+  run fmt on changed files
+  .../skills/do/scripts/vcs-op fix-commit "refactor(hickey|lowy): <short label>"
+  (under --no-vcs: skip commit/push, apply to working tree only)
+
+return { commits, findings_ledger }
+```

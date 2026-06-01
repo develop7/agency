@@ -7,7 +7,7 @@ description: Create a descriptive feature branch from origin/defaultBranch.
 
 ## Requires
 
-- `--no-git` flag
+- `--no-vcs` flag
 - `defaultBranch` from sync
 
 ## Ensures
@@ -16,10 +16,14 @@ description: Create a descriptive feature branch from origin/defaultBranch.
 
 ## Strategies
 
-Detect the default branch: `git symbolic-ref refs/remotes/origin/HEAD`
+Read `vcs` and `defaultBranch` from `.do-results.json`. Then:
 
-1. Create a descriptive feature branch from `origin/<default>`
+```
+.../skills/do/scripts/vcs-op branch <descriptive-name> <defaultBranch>
+```
+
+The script handles the VCS-specific details: git creates `git branch <name> origin/<default>`; jj creates `jj new <default>` followed by `jj bookmark create <name> -r @`.
 
 That's it — just the local branch. No commit, no push, no PR. The branch is pushed later in **commit**, and the PR is created in **create-pr** after all changes are done.
 
-**Verify**: On a feature branch (not master/main).
+**Verify**: `scripts/vcs-op head-revision` returns the new branch name (not master/main).

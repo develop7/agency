@@ -7,7 +7,7 @@ description: Open a draft PR on GitHub.
 
 ## Requires
 
-- `--no-git` flag
+- `--no-vcs` flag
 - `forge` from sync
 - Primary feature commit pushed
 

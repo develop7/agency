@@ -22,7 +22,7 @@ Present a summary of all steps with their verification status. If any step has a
 `"completed"` requires **all steps `passed`**, with six exceptions that count toward completion:
 
 1. A step `skipped` with `reason` beginning `"non-<forge> forge:"`.
-2. A step `skipped` with `reason` `"--no-git"`.
+2. A step `skipped` with `reason` `"--no-vcs"`.
 3. A step `skipped` with `reason` `"no PR evidence section in .agency/do.md"`.
 4. A step `skipped` with `reason` `"--minimal"`.
 5. A step `skipped` with `reason` beginning `"no * command configured"`.
@@ -55,8 +55,8 @@ Be specific to this run's data, not generic advice.
 
 #### PR comment & wrap-up
 
-**If `--no-git`**: Print the timing table and optimization suggestions to the terminal only. List files modified in the working tree (`git status --porcelain`). Remind the user that changes are uncommitted.
+**If `--no-vcs`**: Print the timing table and optimization suggestions to the terminal only. List files modified in the working tree (`scripts/vcs-op dirty`). Remind the user that changes are uncommitted.
 
-**If `forge != github`**: Report the branch name (and remote URL via `git remote get-url origin`). Print timing table and suggestions to the terminal only.
+**If `forge != github`**: Report the branch name (and remote URL via `scripts/vcs-op remote-url`). Print timing table and suggestions to the terminal only.
 
 **If `forge == github`**: Report the PR URL. Then post the final step status table as a **PR comment** using `gh pr comment`.

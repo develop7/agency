@@ -7,7 +7,7 @@ description: Fetch origin, detect forge, initialize workflow state.
 
 ## Requires
 
-- `--no-git` flag (parsed by `do-driver init`)
+- `--no-vcs` flag (parsed by `do-driver init`)
 
 ## Ensures
 
@@ -17,7 +17,7 @@ description: Fetch origin, detect forge, initialize workflow state.
 
 ## Strategies
 
-Run the `scripts/steps/sync` script in this skill's directory, passing `true` or `false` for `--no-git`:
+Run the `scripts/steps/sync` script in this skill's directory, passing `true` or `false` for `--no-vcs`:
 
 ```
 .../skills/do/scripts/steps/sync <noGit>
@@ -26,12 +26,12 @@ Run the `scripts/steps/sync` script in this skill's directory, passing `true` or
 The script:
 
 - Fetches `origin` and pins `origin/HEAD`
-- If `--no-git` is **not** set and the branch is behind origin (ahead-count 0), fast-forwards with `git pull --ff-only`. Under `--no-git`, fetching happens but the working tree is not touched — uncommitted work is preserved.
-- Prints the dirty-tree hint to stderr (no pause) when the tree is dirty and `--no-git` is not set:
+- If `--no-vcs` is **not** set and the branch is behind origin (ahead-count 0), fast-forwards with `git pull --ff-only`. Under `--no-vcs`, fetching happens but the working tree is not touched — uncommitted work is preserved.
+- Prints the dirty-tree hint to stderr (no pause) when the tree is dirty and `--no-vcs` is not set:
 
-  > _Dirty tree detected. Continuing will create a fresh branch on top of these changes. If you wanted the agent to extend your WIP in place without touching git, re-run with `--no-git`._
+  > _Dirty tree detected. Continuing will create a fresh branch on top of these changes. If you wanted the agent to extend your WIP in place without touching git, re-run with `--no-vcs`._
 
-- Classifies the forge from `git remote get-url origin` — `github.com` → `github`, `bitbucket.` (covers `bitbucket.org` and self-hosted servers like `bitbucket.juspay.net`) → `bitbucket`, otherwise `unknown`.
+- Classifies the forge from `scripts/vcs-op remote-url` — `github.com` → `github`, `bitbucket.` (covers `bitbucket.org` and self-hosted servers like `bitbucket.juspay.net`) → `bitbucket`, otherwise `unknown`.
 - Calls `scripts/do-results init <forge> <noGit>` then `scripts/do-results step sync passed ...`.
 - Prints `forge=<value>`, `branch=<value>`, `defaultBranch=<value>` on stdout for downstream steps.
 

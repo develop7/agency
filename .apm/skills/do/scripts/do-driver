@@ -5,7 +5,7 @@
 # choreography and calls this script only to record state and emit summaries.
 #
 # Usage:
-#   do-driver init [--no-git] [--minimal] [--from=<step>] <task>
+#   do-driver init [--review] [--no-vcs] [--minimal] [--from=<step>] <task>
 #   do-driver start <step>
 #   do-driver end <step> <status> <verification> [reason]
 #   do-driver skip <step> <reason>
@@ -27,14 +27,16 @@ shift
 
 case "$cmd" in
   init)
-    noGit="false"
+    review="false"
+    noVcs="false"
     minimal="false"
     from=""
     task=""
 
     while [ $# -gt 0 ]; do
       case "$1" in
-        --no-git) noGit="true"; shift ;;
+        --review) review="true"; shift ;;
+        --no-vcs) noVcs="true"; shift ;;
         --minimal) minimal="true"; shift ;;
         --from=*)
           from="${1#*=}"
@@ -52,7 +54,8 @@ case "$cmd" in
     done
 
     "$DO_RESULTS" init >/dev/null
-    "$DO_RESULTS" set noGit "$noGit" >/dev/null
+    "$DO_RESULTS" set review "$review" >/dev/null
+    "$DO_RESULTS" set noVcs "$noVcs" >/dev/null
     "$DO_RESULTS" set minimal "$minimal" >/dev/null
     if [ -n "$from" ]; then
       "$DO_RESULTS" set from "$from" >/dev/null
@@ -60,7 +63,7 @@ case "$cmd" in
     if [ -n "$task" ]; then
       "$DO_RESULTS" set task "$task" >/dev/null
     fi
-    echo "init: noGit=$noGit minimal=$minimal from=${from:-default}"
+    echo "init: review=$review noVcs=$noVcs minimal=$minimal from=${from:-default}"
     ;;
 
   start)

@@ -8,7 +8,7 @@ description: Attach empirical evidence to the PR (opt-in).
 ## Requires
 
 - `--minimal` flag
-- `--no-git` flag
+- `--no-vcs` flag
 - `forge` from sync
 - CI passed
 
@@ -27,7 +27,7 @@ The section is project-specific and free-form: inline prose, pointer to another 
 The sub-agent prompt should include:
 
 - The literal section content from `.agency/do.md`.
-- Standard PR context: PR URL, branch name, base branch, current commit SHA, and `git diff origin/HEAD...HEAD --name-only`.
+- Standard PR context: PR URL, branch name, base branch, current commit SHA, and `scripts/vcs-op diff-range <defaultBranch> --name-only`.
 - An explicit instruction that the sub-agent's job is to return a single block of markdown suitable for posting under a `## Evidence` heading.
 
 After the sub-agent returns, post its output as one PR comment using `gh pr comment` under a `## Evidence` heading. Use the **single-quoted heredoc** pattern so backticks and `$` survive unescaped.
