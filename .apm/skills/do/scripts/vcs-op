@@ -103,7 +103,6 @@ case "$op" in
     case "$vcs" in
       git) git rev-parse --abbrev-ref HEAD ;;
       jj)
-        # shellcheck disable=SC2168
         bookmark=$(jj bookmark list -r @ -T 'name' 2>/dev/null | head -1)
         if [ -z "$bookmark" ]; then
           jj log -r @ --no-graph -T 'change_id' 2>/dev/null
@@ -228,7 +227,7 @@ case "$op" in
         git commit -m "$msg"
         ;;
       jj)
-        jj describe -m "$msg"
+        jj describe -m "$msg" && jj new
         ;;
       *) echo "vcs-op: no VCS detected" >&2; exit 1 ;;
     esac
@@ -262,10 +261,10 @@ case "$op" in
         git push
         ;;
       jj)
-        jj new -m "$msg"
-        bookmark=$(jj bookmark list -r '@-' -T 'name' 2>/dev/null | head -1)
+        jj describe -m "$msg" && jj new
+        bookmark=$(jj bookmark list -r '@--' -T 'name' 2>/dev/null | head -1)
         if [ -n "$bookmark" ]; then
-          jj bookmark move "$bookmark" --to @ 2>/dev/null || true
+          jj bookmark move "$bookmark" --to @- 2>/dev/null || true
         fi
         jj git push
         ;;

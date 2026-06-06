@@ -57,6 +57,6 @@ Be specific to this run's data, not generic advice.
 
 **If `--no-vcs`**: Print the timing table and optimization suggestions to the terminal only. List files modified in the working tree (`scripts/vcs-op dirty`). Remind the user that changes are uncommitted.
 
-**If `forge != github`**: Report the branch name (and remote URL via `scripts/vcs-op remote-url`). Print timing table and suggestions to the terminal only.
+**If `forge != github`**: Report the branch name (and remote URL via `bash scripts/vcs-op remote-url`). Print timing table and suggestions to the terminal only.
 
 **If `forge == github`**: Report the PR URL. Then post the final step status table as a **PR comment** using `gh pr comment`.

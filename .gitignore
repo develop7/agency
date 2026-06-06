@@ -1,6 +1,15 @@
-.worktrees/
-.do-results.json
+# Exclude everything
+*
 
+# Except things we do care of
+!/.apm/**
+!/docs/**
+!/website/**
+!/.github/workflows/**
+!/apm.yml
+!/justfile
+!/LICENSE
+!/README.md
 
 # APM dependencies
 apm_modules/

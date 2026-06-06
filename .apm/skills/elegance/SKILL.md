@@ -5,14 +5,17 @@ description: Iteratively study and apply elegant coding patterns. Each iteration
 
 # Elegance
 
-Iteratively study and apply elegant coding patterns. Each iteration: understand the code, research what simple & elegant code looks like, apply learnings, verify with CI.
+Iteratively study and apply elegant coding patterns. Each iteration: understand the code, research what simple & elegant
+code looks like, apply learnings, verify with CI.
 
 Run for **3 iterations** (or as specified by the user — can be a number or a duration like `2h`).
 
 ## 0. Determine Scope
 
-- Before starting, use the `AskUserQuestion` tool to ask: should this operate on the **whole codebase** or only on **changes in the current branch/PR**?
-- If scoped to current branch/PR, get the diff: use `.../skills/do/scripts/vcs-op diff-range <base>` to identify changed files and limit all subsequent steps to those files only.
+- Before starting, use the `AskUserQuestion` tool to ask: should this operate on the **whole codebase** or only on *
+  *changes in the current branch/PR**?
+- If scoped to current branch/PR, get the diff: use `bash .../skills/do/scripts/vcs-op diff-range <base>` to identify changed
+  files and limit all subsequent steps to those files only.
 
 ## For each iteration (1 to N):
 

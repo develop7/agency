@@ -18,21 +18,29 @@ description: Run relevant tests.
 ## Pattern
 
 Instances [check-loop](../patterns/check-loop.md) with:
+
 - `runner`: read `.agency/do.md` for `## Test command`, run relevant tests
 - `fixer`: fix test failures
 - Config: `max_attempts: 4`, `coverage_check: true`, `loop_artifacts: commit-per-fix`
 
 ## Strategies
 
-Read `.agency/do.md` and look for a `## Test command` section. Run only the tests relevant to the code paths changed in this PR.
+Read `.agency/do.md` and look for a `## Test command` section. Run only the tests relevant to the code paths changed in
+this PR.
 
-Use `scripts/vcs-op diff-range <defaultBranch> --name-only` to identify changed files and determine which tests are relevant.
+Use `scripts/vcs-op diff-range <defaultBranch> --name-only` to identify changed files and determine which tests are
+relevant.
 
-If changes are purely internal with no user-facing impact, unit tests may suffice — skip e2e if no relevant scenarios exist. If no test command is documented, skip with a note.
+If changes are purely internal with no user-facing impact, unit tests may suffice — skip e2e if no relevant scenarios
+exist. If no test command is documented, skip with a note.
 
-**Coverage gap check**: After the test command exits 0, confirm at least one of the tests run actually exercised the new behavior (per the **implement** step's classification). A green run that didn't touch the changed code paths is a coverage gap, not a pass. Refactor/docs/internal-cleanup diffs are exempt. If a gap is found, treat it as a real failure: write the missing test, then loop through **fmt** → **commit** → **test**.
+**Coverage gap check**: After the test command exits 0, confirm at least one of the tests run actually exercised the new
+behavior (per the **implement** step's classification). A green run that didn't touch the changed code paths is a
+coverage gap, not a pass. Refactor/docs/internal-cleanup diffs are exempt. If a gap is found, treat it as a real
+failure: write the missing test, then loop through **fmt** → **commit** → **test**.
 
-**Verify**: Tests pass (exit code 0) **and** the new behavior is covered, or the diff is exempt from the coverage check, or no relevant tests to run.
+**Verify**: Tests pass (exit code 0) **and** the new behavior is covered, or the diff is exempt from the coverage check,
+or no relevant tests to run.
 **If failed** (max 4 attempts): Analyze the failure. If flaky, re-run. If real: fix → go to **fmt**, then retry.
 
 ## Delegation
@@ -45,7 +53,7 @@ loop:
   if no command configured:
     return { verdict: "no-command-configured" }
 
-  run tests relevant to changes (via scripts/vcs-op diff-range <defaultBranch> --name-only)
+  run tests relevant to changes (via bash scripts/vcs-op diff-range <defaultBranch> --name-only)
   if exit 0:
     if coverage_check:
       confirm new behavior is exercised via test logs
