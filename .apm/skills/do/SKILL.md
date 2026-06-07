@@ -26,6 +26,12 @@ shebang; they are intentionally non-executable. This prevents accidental direct 
 `bash scripts/do-driver init` always works. The agent should follow this convention literally:
 do not drop the `bash` prefix in commands, and do not rely on the shebang.
 
+**Jujutsu gotcha: `jj new` moves `@` to a new empty change; `jj new --no-edit` does NOT.** If the agent wants
+to start a new change (e.g., to add followup work on top of an existing WIP), use bare `jj new`. The
+`--no-edit` flag is for the rare case where you want to create a new change but keep editing the current
+one — almost never what the workflow wants. Using `--no-edit` by accident means the subsequent edits
+land in the existing change, not the new one; the workflow then has no place to put the new work.
+
 1. Parse arguments: `[--review] [--no-vcs] [--minimal] [--from <step-id>] <task>`
 2. Call `bash scripts/do-driver init <flags> <task>` to initialize state.
 3. Seed the task checklist using Nickel:
@@ -292,8 +298,15 @@ bash .../skills/do/scripts/vcs-op push <branch>
 
 Git: stages all changes with `git add -A`, commits with `git commit -m "..."`, pushes with
 `bash scripts/vcs-op push <branch>`.
-Jujutsu: auto-snapshots the working copy, describes with `jj describe -m "..."`, pushes the bookmark with
-`jj git push --bookmark <name>`.
+Jujutsu: auto-snapshots the working copy, describes with `jj describe -m "..."`, then `jj new` to start a fresh
+change. Before the `jj new`, the bookmark is on `@` (the change being committed); after, `@` is the new empty change
+and the bookmark is now on `@-` (the just-described commit). If the working copy was started with `jj new` before
+calling `vcs-op commit` (the followup case — see **How to walk the graph**), the bookmark is somewhere up the
+parent chain (`@--`, `@---`, ...). `vcs-op commit` walks the chain to find the bookmark and moves it to `@-` so the
+subsequent `bash scripts/vcs-op push <bookmark>` lands on the new commit. (Note: do **not** start the new change
+with `jj new --no-edit` — see the Jujutsu gotcha above.) Pushes the bookmark with
+`jj git push --bookmark <name>`. `bash scripts/vcs-op log-head` returns the just-described change (`@-` for jj,
+equivalent to `git log -1 --oneline` showing HEAD), so the verify below works for both VCSes.
 
 This is the **primary feature commit**. Downstream **hickey+lowy** and **police** steps produce their own follow-up
 commits — one per finding or violation addressed — which keeps the PR history a readable progression of "what was built,

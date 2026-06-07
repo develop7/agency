@@ -76,6 +76,45 @@ get_default_branch() {
   esac
 }
 
+# For jj: after `vcs-op commit` or `vcs-op fix-commit` (both of which
+# do `jj describe && jj new`), @ is the new empty change. The
+# working bookmark is somewhere up the parent chain (@-, @--,
+# @---, ...). Find it (up to 20 levels) and move it to @- so the
+# subsequent `vcs-op push` lands on the just-described change.
+# Used by both `commit` and `fix-commit`; only meaningful for jj.
+#
+# Implementation note: the walk starts at `@` (not `@-`). The first
+# iteration's `rev="${rev}-"` makes the first query `@-`. So:
+#   - default case (bookmark already on @-): found at iter 1, move
+#     is a no-op, helper exits. Cheap.
+#   - followup case (bookmark on @--, @---, ...): not found at @-,
+#     walk continues until found or depth exhausted.
+#   - multi-bookmark case (X on @-, Y on @---): X found first, move
+#     is a no-op, Y stays put. Matches the original pre-refactor
+#     behavior of the `commit` case which had an `if [ -z ... ]`
+#     guard on @-.
+move_bookmark_to_described_change() {
+  local rev="@"
+  local bookmark=""
+  for _ in $(seq 1 20); do
+    rev="${rev}-"
+    bookmark="$(jj bookmark list -r "$rev" -T 'name ++ "\n"' 2>/dev/null | head -1)"
+    [ -n "$bookmark" ] && break
+  done
+  if [ -n "$bookmark" ]; then
+    jj bookmark move "$bookmark" --to @- || true
+  fi
+}
+
+# For jj: shared `describe + new + bookmark-move` sequence used by
+# both `commit` and `fix-commit`. The caller passes a conventional
+# commit message; the function handles the rest.
+describe_and_move_bookmark() {
+  local msg="${1:?commit message required}"
+  jj describe -m "$msg" && jj new
+  move_bookmark_to_described_change
+}
+
 vcs="$(detect_vcs)"
 op="${1:-}"
 shift || true
@@ -102,7 +141,10 @@ case "$op" in
     case "$vcs" in
       git) git rev-parse --abbrev-ref HEAD ;;
       jj)
-        bookmark=$(jj bookmark list -r @ -T 'name' 2>/dev/null | head -1)
+        # Uses @ (not @-) intentionally: the `branch` op creates a
+        # bookmark on @ immediately, and this op returns the bookmark
+        # tracking @. See `head-commit-sha` for the converse rationale.
+        bookmark=$(jj bookmark list -r @ -T 'name ++ "\n"' 2>/dev/null | head -1)
         if [ -z "$bookmark" ]; then
           jj log -r @ --no-graph -T 'change_id' 2>/dev/null
         else
@@ -113,9 +155,16 @@ case "$op" in
     esac
     ;;
   head-commit-sha)
+    # For jj, return the SHA of the just-committed change (@-) — the
+    # same axis as log-head. The verify (ci step) compares this against
+    # the commit CI ran against, which is the just-pushed commit. Using
+    # @ here would return the SHA of the new empty change. (Note:
+    # `head-revision` above correctly uses @ instead — it returns the
+    # bookmark tracking @, which the `branch` step needs immediately
+    # after `jj new && jj bookmark create name -r @`.)
     case "$vcs" in
       git) git rev-parse HEAD ;;
-      jj)  jj log -r @ --no-graph -T 'commit_id' 2>/dev/null ;;
+      jj)  jj log -r @- --no-graph -T 'commit_id' 2>/dev/null ;;
       *)   echo "vcs-op: no VCS detected" >&2; exit 1 ;;
     esac
     ;;
@@ -137,11 +186,13 @@ case "$op" in
         git diff "origin/${base}...HEAD" -- "${@:2}"
         ;;
       jj)
-        merge_base=$(jj log -r 'heads(ancestors(@) & ancestors('"$base"'))' --no-graph -T 'change_id' 2>/dev/null | head -1)
+        # Diff from merge-base to the just-committed change (@-).
+        # Using @ here would diff to the new empty change (nothing).
+        merge_base=$(jj log -r 'heads(ancestors(@-) & ancestors('"$base"'))' --no-graph -T 'change_id' 2>/dev/null | head -1)
         if [ -n "$merge_base" ]; then
-          jj diff --from "$merge_base" --to @ -- "${@:2}"
+          jj diff --from "$merge_base" --to @- -- "${@:2}"
         else
-          jj diff --from "$base" --to @ -- "${@:2}"
+          jj diff --from "$base" --to @- -- "${@:2}"
         fi
         ;;
       *) echo "vcs-op: no VCS detected" >&2; exit 1 ;;
@@ -152,11 +203,11 @@ case "$op" in
     case "$vcs" in
       git) git diff "origin/${base}...HEAD" --name-only -- "${@:2}" ;;
       jj)
-        merge_base=$(jj log -r 'heads(ancestors(@) & ancestors('"$base"'))' --no-graph -T 'change_id' 2>/dev/null | head -1)
+        merge_base=$(jj log -r 'heads(ancestors(@-) & ancestors('"$base"'))' --no-graph -T 'change_id' 2>/dev/null | head -1)
         if [ -n "$merge_base" ]; then
-          jj diff --from "$merge_base" --to @ --name-only -- "${@:2}"
+          jj diff --from "$merge_base" --to @- --name-only -- "${@:2}"
         else
-          jj diff --from "$base" --to @ --name-only -- "${@:2}"
+          jj diff --from "$base" --to @- --name-only -- "${@:2}"
         fi
         ;;
       *)   echo "vcs-op: no VCS detected" >&2; exit 1 ;;
@@ -167,11 +218,11 @@ case "$op" in
     case "$vcs" in
       git) git diff "origin/${base}...HEAD" --shortstat -- "${@:2}" ;;
       jj)
-        merge_base=$(jj log -r 'heads(ancestors(@) & ancestors('"$base"'))' --no-graph -T 'change_id' 2>/dev/null | head -1)
+        merge_base=$(jj log -r 'heads(ancestors(@-) & ancestors('"$base"'))' --no-graph -T 'change_id' 2>/dev/null | head -1)
         if [ -n "$merge_base" ]; then
-          jj diff --from "$merge_base" --to @ --summary -- "${@:2}"
+          jj diff --from "$merge_base" --to @- --summary -- "${@:2}"
         else
-          jj diff --from "$base" --to @ --summary -- "${@:2}"
+          jj diff --from "$base" --to @- --summary -- "${@:2}"
         fi
         ;;
       *)   echo "vcs-op: no VCS detected" >&2; exit 1 ;;
@@ -182,11 +233,12 @@ case "$op" in
     case "$vcs" in
       git) git diff --diff-filter=A --name-only "origin/${base}...HEAD" -- "${@:2}" ;;
       jj)
-        merge_base=$(jj log -r 'heads(ancestors(@) & ancestors('"$base"'))' --no-graph -T 'change_id' 2>/dev/null | head -1)
+        # List files added in the just-committed change (@-) vs base.
+        merge_base=$(jj log -r 'heads(ancestors(@-) & ancestors('"$base"'))' --no-graph -T 'change_id' 2>/dev/null | head -1)
         if [ -n "$merge_base" ]; then
-          comm -13 <(jj file list -r "$merge_base" | sort) <(jj file list -r @ | sort)
+          comm -13 <(jj file list -r "$merge_base" | sort) <(jj file list -r @- | sort)
         else
-          comm -13 <(jj file list -r "$base" | sort) <(jj file list -r @ | sort)
+          comm -13 <(jj file list -r "$base" | sort) <(jj file list -r @- | sort)
         fi
         ;;
       *)   echo "vcs-op: no VCS detected" >&2; exit 1 ;;
@@ -196,14 +248,20 @@ case "$op" in
     base="${1:-$(get_default_branch)}"
     case "$vcs" in
       git) git log "origin/${base}..HEAD" --oneline -- "${@:2}" ;;
-      jj)  jj log -r "${base}..@" --no-graph -T 'separate(" ", commit_id.shortest(8), change_id.shortest(8), description.first_line()) ++ "\n"' 2>/dev/null ;;
+      jj)  jj log -r "${base}..@-" --no-graph -T 'separate(" ", commit_id.shortest(8), change_id.shortest(8), description.first_line()) ++ "\n"' 2>/dev/null ;;
       *)   echo "vcs-op: no VCS detected" >&2; exit 1 ;;
     esac
     ;;
   log-head)
+    # For jj, return the just-described change (@-) rather than @.
+    # After `vcs-op commit` (which does `jj describe && jj new`), @ is
+    # the new empty change; @- is the one the caller just created with
+    # the conventional message and that the subsequent `vcs-op push`
+    # just pushed. This matches git's `git log -1 --oneline` (return
+    # HEAD = the most recent meaningful commit on the branch).
     case "$vcs" in
       git) git log -1 --oneline ;;
-      jj)  jj log -r @ --no-graph -n 1 -T 'separate(" ", commit_id.shortest(8), change_id.shortest(8), description.first_line()) ++ "\n"' 2>/dev/null ;;
+      jj)  jj log -r @- --no-graph -n 1 -T 'separate(" ", commit_id.shortest(8), change_id.shortest(8), description.first_line()) ++ "\n"' 2>/dev/null ;;
       *)   echo "vcs-op: no VCS detected" >&2; exit 1 ;;
     esac
     ;;
@@ -226,27 +284,8 @@ case "$op" in
         git commit -m "$msg"
         ;;
       jj)
-        jj describe -m "$msg" && jj new
-        # Ensure the working bookmark is on the just-described change (@-).
-        # In the default entry, the bookmark was on @ before `jj new` ran,
-        # so it's already on @- (jj's bookmarks don't move with `@`).
-        # In the followup entry — or anywhere the agent did `jj new`
-        # before calling commit — the bookmark is on some earlier ancestor
-        # (@--, @---, ...). Without a move, `vcs-op push <bookmark>`
-        # would push that ancestor, not the new commit.
-        if [ -z "$(jj bookmark list -r @- -T 'name' 2>/dev/null | head -1)" ]; then
-          # Walk up the parent chain to find the bookmark we're tracking.
-          rev="@-"
-          bookmark=""
-          for _ in $(seq 1 20); do
-            rev="${rev}-"
-            bookmark="$(jj bookmark list -r "$rev" -T 'name' 2>/dev/null | head -1)"
-            [ -n "$bookmark" ] && break
-          done
-          if [ -n "$bookmark" ]; then
-            jj bookmark move "$bookmark" --to @- 2>/dev/null || true
-          fi
-        fi
+        # describe + new + bookmark-move (see helper docs).
+        describe_and_move_bookmark "$msg"
         ;;
       *) echo "vcs-op: no VCS detected" >&2; exit 1 ;;
     esac
@@ -280,11 +319,8 @@ case "$op" in
         git push
         ;;
       jj)
-        jj describe -m "$msg" && jj new
-        bookmark=$(jj bookmark list -r '@--' -T 'name' 2>/dev/null | head -1)
-        if [ -n "$bookmark" ]; then
-          jj bookmark move "$bookmark" --to @- 2>/dev/null || true
-        fi
+        # Same describe+new+bookmark-move as `commit`, then push.
+        describe_and_move_bookmark "$msg"
         jj git push
         ;;
       *) echo "vcs-op: no VCS detected" >&2; exit 1 ;;
