@@ -7,7 +7,10 @@
 # Usage:
 #   do-driver init [--review] [--no-vcs] [--minimal] [--from=<step>] <task>
 #   do-driver start <step>
-#   do-driver end <step> <status> <verification> [reason]
+#   do-driver end <status> <verification> [reason]
+#     (the step name comes from the active pendingStep, set by `start`;
+#     `end` is the only do-driver command that doesn't take a step arg
+#     because the caller already used `start` to begin the step)
 #   do-driver skip <step> <reason>
 #   do-driver set <field> <value>
 #   do-driver summary
@@ -57,13 +60,21 @@ case "$cmd" in
     "$DO_RESULTS" set review "$review" >/dev/null
     "$DO_RESULTS" set noVcs "$noVcs" >/dev/null
     "$DO_RESULTS" set minimal "$minimal" >/dev/null
+    # Pre-populate vcs at init time. `sync` is the canonical source and
+    # will overwrite on its run, but followup entry points skip sync —
+    # without this, vcs stays unset in .do-results.json until the agent
+    # notices and runs `do-results set vcs <x>` manually.
+    vcs="$("$SCRIPT_DIR/vcs-op" detect 2>/dev/null || echo unknown)"
+    if [ "$vcs" != "unknown" ]; then
+      "$DO_RESULTS" set vcs "$vcs" >/dev/null
+    fi
     if [ -n "$from" ]; then
       "$DO_RESULTS" set from "$from" >/dev/null
     fi
     if [ -n "$task" ]; then
       "$DO_RESULTS" set task "$task" >/dev/null
     fi
-    echo "init: review=$review noVcs=$noVcs minimal=$minimal from=${from:-default}"
+    echo "init: review=$review noVcs=$noVcs minimal=$minimal from=${from:-default} vcs=${vcs}"
     ;;
 
   start)

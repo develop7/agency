@@ -228,6 +228,26 @@ case "$op" in
         ;;
       jj)
         jj describe -m "$msg" && jj new
+        # Ensure the working bookmark is on the just-described change (@-).
+        # In the default entry, the bookmark was on @ before `jj new` ran,
+        # so it's already on @- (jj's bookmarks don't move with `@`).
+        # In the followup entry — or anywhere the agent did `jj new`
+        # before calling commit — the bookmark is on some earlier ancestor
+        # (@--, @---, ...). Without a move, `vcs-op push <bookmark>`
+        # would push that ancestor, not the new commit.
+        if [ -z "$(jj bookmark list -r @- -T 'name' 2>/dev/null | head -1)" ]; then
+          # Walk up the parent chain to find the bookmark we're tracking.
+          rev="@-"
+          bookmark=""
+          for _ in $(seq 1 20); do
+            rev="${rev}-"
+            bookmark="$(jj bookmark list -r "$rev" -T 'name' 2>/dev/null | head -1)"
+            [ -n "$bookmark" ] && break
+          done
+          if [ -n "$bookmark" ]; then
+            jj bookmark move "$bookmark" --to @- 2>/dev/null || true
+          fi
+        fi
         ;;
       *) echo "vcs-op: no VCS detected" >&2; exit 1 ;;
     esac
