@@ -56,6 +56,17 @@ case "$cmd" in
       esac
     done
 
+    # --review pauses after research for plan-approval. Any --from that
+    # starts past research (followup, post-implement, polish, ci-only)
+    # skips the pause entirely — combining the two flags would silently
+    # drop the review the user asked for. Force the user to pick one.
+    if [ "$review" = "true" ] && [ -n "$from" ] && [ "$from" != "default" ]; then
+      echo "do-driver: --review is incompatible with --from=$from" >&2
+      echo "         --from=$from starts past research, where the plan-approval pause lives." >&2
+      echo "         drop --review if the plan is already approved, or drop --from for a full workflow." >&2
+      exit 2
+    fi
+
     "$DO_RESULTS" init >/dev/null
     "$DO_RESULTS" set review "$review" >/dev/null
     "$DO_RESULTS" set noVcs "$noVcs" >/dev/null

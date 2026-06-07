@@ -43,10 +43,12 @@ Only GitHub has an active code path today — Bitbucket/other forges gracefully 
 Tracking: [srid/agency#10](https://github.com/srid/agency/issues/10).
 
 - `--review`: Pause after **research** for user plan approval via `EnterPlanMode`/`ExitPlanMode`, then continue
-  autonomously.
+  autonomously. **Incompatible with `--from=<non-default>`** (any entry that skips research — `followup`,
+  `post-implement`, `polish`, `ci-only`): the plan-approval pause would be silently dropped. `do-driver init`
+  errors out on the conflict; drop one of the flags.
 - `--no-vcs`: Extend the working tree **in place** — do not create a branch, commit, push, or touch any PR. VCS-mutating
   nodes skip with `reason="--no-vcs"`.
-- `--minimal`: Skip **docs**, **hickey-lowy**, **police**, and **evidence** (omitted from todo list entirely).
+- `--minimal`: Skip **docs**, `hickey-lowy`, **police**, and **evidence** (omitted from todo list entirely).
 - `--from <step-id>`: Start from a specific node. Entry points: `default`→sync, `followup`→implement, `post-implement`
   →fmt, `polish`→hickey-lowy, `ci-only`→ci.
 
