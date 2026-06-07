@@ -1,4 +1,3 @@
-#!/usr/bin/env bash
 # Semantic VCS operation dispatcher. Translates named operations into
 # the appropriate tool-specific commands for git or jj. Consumers call
 # this instead of raw `git` or `jj` commands.

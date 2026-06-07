@@ -9,7 +9,7 @@ description: Three-pass quality gate.
 
 - `--minimal` flag
 - `--no-vcs` flag
-- Diff `scripts/vcs-op diff-range <defaultBranch>`
+- Diff `bash scripts/vcs-op diff-range <defaultBranch>`
 
 ## Ensures
 
@@ -25,7 +25,7 @@ Instances [check-loop](../patterns/check-loop.md) with:
 
 ## Strategies
 
-Use `scripts/vcs-op diff-range <defaultBranch> --name-only` to check if the PR contains code changes. If all changed files are documentation-only (e.g., `.md`, `.txt`, `README`, docs/) — skip this step with a note.
+Use `bash scripts/vcs-op diff-range <defaultBranch> --name-only` to check if the PR contains code changes. If all changed files are documentation-only (e.g., `.md`, `.txt`, `README`, docs/) — skip this step with a note.
 
 Otherwise, invoke the `/code-police` skill via the Skill tool. It runs three passes: rule checklist, fact-check, and elegance.
 

@@ -32,7 +32,7 @@ A `failed` step always blocks `"completed"`.
 
 #### Timing summary
 
-Call `scripts/do-driver summary`. It delegates to `scripts/steps/done` and emits:
+Call `bash scripts/do-driver summary`. It delegates to `bash scripts/steps/done` and emits:
 
 1. A markdown timing table (step, status, duration, verification), with any step that took ≥30% of total time shown in **bold**.
 2. A total wall-clock line.
@@ -55,7 +55,7 @@ Be specific to this run's data, not generic advice.
 
 #### PR comment & wrap-up
 
-**If `--no-vcs`**: Print the timing table and optimization suggestions to the terminal only. List files modified in the working tree (`scripts/vcs-op dirty`). Remind the user that changes are uncommitted.
+**If `--no-vcs`**: Print the timing table and optimization suggestions to the terminal only. List files modified in the working tree (`bash scripts/vcs-op dirty`). Remind the user that changes are uncommitted.
 
 **If `forge != github`**: Report the branch name (and remote URL via `bash scripts/vcs-op remote-url`). Print timing table and suggestions to the terminal only.
 

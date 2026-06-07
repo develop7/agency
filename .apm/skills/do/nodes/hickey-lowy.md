@@ -9,7 +9,7 @@ description: Parallel structural review with hickey and lowy sub-agents.
 
 - `--minimal` flag
 - `--no-vcs` flag
-- Diff `scripts/vcs-op diff-range <defaultBranch>`
+- Diff `bash scripts/vcs-op diff-range <defaultBranch>`
 - Full task prompt + research context
 
 ## Ensures

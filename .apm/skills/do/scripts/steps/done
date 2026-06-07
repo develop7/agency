@@ -1,4 +1,3 @@
-#!/usr/bin/env bash
 # /do workflow's done step — extracted to a script so the LLM doesn't do
 # timestamp arithmetic over every step. Reads .do-results.json and emits a
 # ready-to-paste markdown timing table plus a FACTS block the agent uses to

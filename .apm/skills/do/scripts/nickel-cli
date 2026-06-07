@@ -1,4 +1,3 @@
-#!/usr/bin/env bash
 # Dispatcher to the Nickel workflow entry point at scripts/cli.ncl.
 # Paths to workflow.ncl and .do-results.json live in cli.ncl itself, not here.
 #

@@ -1,4 +1,3 @@
-#!/usr/bin/env bash
 # /do workflow's driver — a thin state wrapper around do-results.
 #
 # Does NOT sequence, skip, or retry. The agent reads execution.md for
@@ -67,30 +66,30 @@ case "$cmd" in
       exit 2
     fi
 
-    "$DO_RESULTS" init >/dev/null
-    "$DO_RESULTS" set review "$review" >/dev/null
-    "$DO_RESULTS" set noVcs "$noVcs" >/dev/null
-    "$DO_RESULTS" set minimal "$minimal" >/dev/null
+    bash "$DO_RESULTS" init >/dev/null
+    bash "$DO_RESULTS" set review "$review" >/dev/null
+    bash "$DO_RESULTS" set noVcs "$noVcs" >/dev/null
+    bash "$DO_RESULTS" set minimal "$minimal" >/dev/null
     # Pre-populate vcs at init time. `sync` is the canonical source and
     # will overwrite on its run, but followup entry points skip sync —
     # without this, vcs stays unset in .do-results.json until the agent
     # notices and runs `do-results set vcs <x>` manually.
-    vcs="$("$SCRIPT_DIR/vcs-op" detect 2>/dev/null || echo unknown)"
+    vcs="$(bash "$SCRIPT_DIR/vcs-op" detect 2>/dev/null || echo unknown)"
     if [ "$vcs" != "unknown" ]; then
-      "$DO_RESULTS" set vcs "$vcs" >/dev/null
+      bash "$DO_RESULTS" set vcs "$vcs" >/dev/null
     fi
     if [ -n "$from" ]; then
-      "$DO_RESULTS" set from "$from" >/dev/null
+      bash "$DO_RESULTS" set from "$from" >/dev/null
     fi
     if [ -n "$task" ]; then
-      "$DO_RESULTS" set task "$task" >/dev/null
+      bash "$DO_RESULTS" set task "$task" >/dev/null
     fi
     echo "init: review=$review noVcs=$noVcs minimal=$minimal from=${from:-default} vcs=${vcs}"
     ;;
 
   start)
     step="${1:?step required}"
-    "$DO_RESULTS" step-start "$step"
+    bash "$DO_RESULTS" step-start "$step"
     ;;
 
   end)
@@ -98,27 +97,27 @@ case "$cmd" in
     verif="${2:?verification required}"
     reason="${3:-}"
     if [ -n "$reason" ]; then
-      "$DO_RESULTS" step-end "$status" "$verif" "$reason"
+      bash "$DO_RESULTS" step-end "$status" "$verif" "$reason"
     else
-      "$DO_RESULTS" step-end "$status" "$verif"
+      bash "$DO_RESULTS" step-end "$status" "$verif"
     fi
     ;;
 
   skip)
     step="${1:?step required}"
     reason="${2:?reason required}"
-    "$DO_RESULTS" step-start "$step"
-    "$DO_RESULTS" step-end skipped "" "$reason"
+    bash "$DO_RESULTS" step-start "$step"
+    bash "$DO_RESULTS" step-end skipped "" "$reason"
     ;;
 
   set)
     field="${1:?field required}"
     value="${2:?value required}"
-    "$DO_RESULTS" set "$field" "$value"
+    bash "$DO_RESULTS" set "$field" "$value"
     ;;
 
   summary)
-    "$SCRIPT_DIR/steps/done"
+    bash "$SCRIPT_DIR/steps/done"
     ;;
 
   *)

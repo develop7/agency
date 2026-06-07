@@ -28,7 +28,7 @@ Instances [check-loop](../patterns/check-loop.md) with:
 Read `.agency/do.md` and look for a `## Test command` section. Run only the tests relevant to the code paths changed in
 this PR.
 
-Use `scripts/vcs-op diff-range <defaultBranch> --name-only` to identify changed files and determine which tests are
+Use `bash scripts/vcs-op diff-range <defaultBranch> --name-only` to identify changed files and determine which tests are
 relevant.
 
 If changes are purely internal with no user-facing impact, unit tests may suffice — skip e2e if no relevant scenarios

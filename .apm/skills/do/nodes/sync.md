@@ -33,7 +33,7 @@ The script:
   > _Dirty tree detected. Continuing will create a fresh branch on top of these changes. If you wanted the agent to
   extend your WIP in place without touching git, re-run with `--no-vcs`._
 
-- Classifies the forge from `scripts/vcs-op remote-url` — `github.com` → `github`, `bitbucket.` (covers `bitbucket.org`
+- Classifies the forge from `bash scripts/vcs-op remote-url` — `github.com` → `github`, `bitbucket.` (covers `bitbucket.org`
   and self-hosted servers like `bitbucket.juspay.net`) → `bitbucket`, otherwise `unknown`.
 - Calls `bash scripts/do-results init <forge> <noGit>` then `bash scripts/do-results step sync passed ...`.
 - Prints `forge=<value>`, `branch=<value>`, `defaultBranch=<value>` on stdout for downstream steps.

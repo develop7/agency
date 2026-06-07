@@ -1,4 +1,3 @@
-#!/usr/bin/env bash
 # /do workflow's sync step — extracted to a script to collapse several Bash
 # round-trips into one. Handles fetch, fast-forward, forge detection, dirty-
 # tree hint, and initial results bookkeeping. VCS-agnostic: delegates to
@@ -29,10 +28,10 @@ VCS_OP="$SCRIPT_DIR/../vcs-op"
 startedAt="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 # Detect VCS
-vcs="$("$VCS_OP" detect)"
+vcs="$(bash "$VCS_OP" detect)"
 
 # Fetch
-"$VCS_OP" fetch >/dev/null
+bash "$VCS_OP" fetch >/dev/null
 
 # Pin origin/HEAD (git only; jj has no concept of origin/HEAD)
 if [ "$vcs" = "git" ]; then
@@ -60,12 +59,12 @@ if [ "$noVcs" = "false" ]; then
 fi
 
 # Dirty-tree hint (no pause, just print)
-if [ "$noVcs" = "false" ] && "$VCS_OP" dirty; then
+if [ "$noVcs" = "false" ] && bash "$VCS_OP" dirty; then
   echo "Dirty tree detected. Continuing will create a fresh branch on top of these changes. If you wanted the agent to extend your WIP in place without touching git, re-run with --no-vcs." >&2
 fi
 
 # Forge detection from origin URL
-origin_url="$("$VCS_OP" remote-url)"
+origin_url="$(bash "$VCS_OP" remote-url)"
 case "$origin_url" in
   *github.com*)  forge="github" ;;
   *bitbucket.*)  forge="bitbucket" ;;
@@ -76,17 +75,17 @@ esac
 # via the generic `set` command, then record the sync step. Suppress do-results'
 # stdout confirmations — sync emits its own vcs/forge/branch/defaultBranch
 # protocol below and shouldn't pollute it with do-results' echo lines.
-[ -f ".do-results.json" ] || "$DO_RESULTS" init >/dev/null
-"$DO_RESULTS" set vcs "$vcs" >/dev/null
-"$DO_RESULTS" set forge "$forge" >/dev/null
-"$DO_RESULTS" set noVcs "$noVcs" >/dev/null
-"$DO_RESULTS" step sync passed \
+[ -f ".do-results.json" ] || bash "$DO_RESULTS" init >/dev/null
+bash "$DO_RESULTS" set vcs "$vcs" >/dev/null
+bash "$DO_RESULTS" set forge "$forge" >/dev/null
+bash "$DO_RESULTS" set noVcs "$noVcs" >/dev/null
+bash "$DO_RESULTS" step sync passed \
   "fetch ok; vcs=$vcs; forge=$forge; noVcs=$noVcs" \
   "$startedAt" now >/dev/null
 
 # Emit structured facts the agent uses for downstream steps
-branch="$("$VCS_OP" head-revision)"
-default_ref="$("$VCS_OP" default-branch)"
+branch="$(bash "$VCS_OP" head-revision)"
+default_ref="$(bash "$VCS_OP" default-branch)"
 
 echo "vcs=$vcs"
 echo "forge=$forge"

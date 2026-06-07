@@ -19,8 +19,15 @@ sensible default choices and keep moving.
 
 ## How to walk the graph
 
+**Convention: every script invocation is prefixed with `bash` and uses the absolute path
+(`.../skills/do/scripts/<name>`).** The scripts under `scripts/` (and `scripts/steps/`) have no
+shebang; they are intentionally non-executable. This prevents accidental direct execution —
+`scripts/do-driver init` returns `Permission denied` because the file isn't executable, while
+`bash scripts/do-driver init` always works. The agent should follow this convention literally:
+do not drop the `bash` prefix in commands, and do not rely on the shebang.
+
 1. Parse arguments: `[--review] [--no-vcs] [--minimal] [--from <step-id>] <task>`
-2. Call `scripts/do-driver init <flags> <task>` to initialize state.
+2. Call `bash scripts/do-driver init <flags> <task>` to initialize state.
 3. Seed the task checklist using Nickel:
    ```bash
    bash scripts/nickel-cli cli_seed "<from>"
@@ -31,10 +38,10 @@ sensible default choices and keep moving.
    next=$(bash scripts/nickel-cli cli)
    ```
    This returns `{ step, skip, pattern, instructions, requires, pattern_config }`.
-    - If `skip` is true, call `scripts/do-driver skip <step> <reason>` and continue.
-    - Otherwise: call `scripts/do-driver start <step>`, read `nodes/<step>.md`, do the work, then call
-      `scripts/do-driver end <status> "<verification>" [reason]`.
-5. When Nickel returns `{ done = true }`, call `scripts/do-driver summary`.
+    - If `skip` is true, call `bash scripts/do-driver skip <step> <reason>` and continue.
+    - Otherwise: call `bash scripts/do-driver start <step>`, read `nodes/<step>.md`, do the work, then call
+      `bash scripts/do-driver end <status> "<verification>" [reason]`.
+5. When Nickel returns `{ done = true }`, call `bash scripts/do-driver summary`.
 
 ## Arguments
 
@@ -54,13 +61,13 @@ Tracking: [srid/agency#10](https://github.com/srid/agency/issues/10).
 
 ## Results Tracking
 
-Every node is bookended by `scripts/do-driver start <name>` before work and
-`scripts/do-driver end <status> "<verification>" [reason]` after verification. The driver wraps `scripts/do-results`,
+Every node is bookended by `bash scripts/do-driver start <name>` before work and
+`bash scripts/do-driver end <status> "<verification>" [reason]` after verification. The driver wraps `bash scripts/do-results`,
 which persists step records in `.do-results.json`.
 
 **Trust the driver's stdout.** Every mutation echoes a one-line confirmation.
 
-The `scripts/do-results` script tracks:
+The `bash scripts/do-results` script tracks:
 
 - Step `status` — `passed`, `failed`, or `skipped`.
 - `active` — state enum (`working`, `waiting`, `false`). The stop hook uses this.
@@ -68,8 +75,8 @@ The `scripts/do-results` script tracks:
 
 **Workflow fields** stashed via `do-driver set <field> <value>`:
 
-- `vcs` — `git`, `jj`, or `unknown`. Populated by `scripts/steps/sync` after VCS detection.
-- `forge` — `github`, `bitbucket`, or `unknown`. Populated by `scripts/steps/sync` after forge detection.
+- `vcs` — `git`, `jj`, or `unknown`. Populated by `bash scripts/steps/sync` after VCS detection.
+- `forge` — `github`, `bitbucket`, or `unknown`. Populated by `bash scripts/steps/sync` after forge detection.
 - `noVcs` — `true` or `false`. Reflects the `--no-vcs` flag.
 - `minimal` — `true` or `false`. Reflects the `--minimal` flag.
 - `review` — `true` or `false`. Reflects the `--review` flag.
@@ -81,7 +88,7 @@ The `scripts/do-results` script tracks:
 - `step-end <status> "<verification>" ["<reason>"]` — call after verification. Echoes
   `recorded: <name> <status> (steps=<count>, pending=<none|name>)`.
 - `step <name> <status> "<verification>" <startedAt> <completedAt> ["<reason>"]` — single-call form used by
-  `scripts/steps/sync` where `startedAt` was captured in shell. Echoes `recorded: <name> <status> (steps=<count>)`.
+  `bash scripts/steps/sync` where `startedAt` was captured in shell. Echoes `recorded: <name> <status> (steps=<count>)`.
   Agent code should prefer `step-start` / `step-end`.
 - `set <field> <value>` — set an arbitrary top-level field. Used both for lifecycle (`set active waiting`,
   `set status completed`) and for /do-specific values that sync stashes (`set forge github`, `set noVcs false`). Echoes
@@ -91,7 +98,7 @@ The `scripts/do-results` script tracks:
 
 - Bookend every step with `step-start` at the top and `step-end` at the bottom. Calling `step-end` without a prior
   `step-start` is an error; calling `step` with `now` for both timestamps collapses duration to 0 — neither pattern is
-  allowed. Exceptions: `sync` is recorded by `scripts/steps/sync` itself, and skipped steps (duration always 0) may use
+  allowed. Exceptions: `sync` is recorded by `bash scripts/steps/sync` itself, and skipped steps (duration always 0) may use
   back-to-back `step-start` / `step-end skipped`.
 - Don't run `date` yourself or guess timestamps — `do-results` resolves UTC internally.
 
@@ -111,15 +118,15 @@ Rules:
   point.
 - **Skipped steps that stay in the list** (e.g. `branch`/`commit`/`create-pr` under `--no-vcs`, or PR steps on
   non-GitHub forges) go straight to `completed`. Record the skip with a back-to-back
-  `scripts/do-results step-start <name>` / `scripts/do-results step-end skipped ... "<reason>"`; the task list just
+  `bash scripts/do-results step-start <name>` / `bash scripts/do-results step-end skipped ... "<reason>"`; the task list just
   shows the step as done. `--minimal` skips are **not** in this category — they're omitted from the seeded list
   entirely (see above), so there's no task entry to flip.
 - **Failure**: if retries exhaust and the workflow halts, leave the failing step `in_progress`, mark `done` `completed`
-  after the failure summary is written, and run `scripts/do-results set status failed`.
+  after the failure summary is written, and run `bash scripts/do-results set status failed`.
 
 ### sync
 
-Run the `scripts/steps/sync` script in this skill's directory, passing `true` or `false` for `--no-vcs`:
+Run the `bash scripts/steps/sync` script in this skill's directory, passing `true` or `false` for `--no-vcs`:
 
 ```
 bash .../skills/do/scripts/steps/sync <noVcs>
@@ -127,7 +134,7 @@ bash .../skills/do/scripts/steps/sync <noVcs>
 
 The script:
 
-- Detects the VCS type (`.jj/` → `jj`, `.git/` → `git`). All subsequent VCS operations delegate to `scripts/vcs-op`
+- Detects the VCS type (`.jj/` → `jj`, `.git/` → `git`). All subsequent VCS operations delegate to `bash scripts/vcs-op`
   which maps semantic operation names to the active tool.
 - Fetches from the remote (git: `git fetch origin`; jj: `jj git fetch`). For git repos, also pins `origin/HEAD`.
 - If `--no-vcs` is **not** set and the branch is behind origin (ahead-count 0), fast-forwards with `git pull --ff-only`.
@@ -138,10 +145,10 @@ The script:
   > _Dirty tree detected. Continuing will create a fresh branch on top of these changes. If you wanted the agent to
   extend your WIP in place without touching VCS, re-run with `--no-vcs`._
 
-- Classifies the forge from the remote URL (git: `scripts/vcs-op remote-url`; jj: `jj git remote list`) — `github.com` →
+- Classifies the forge from the remote URL (git: `bash scripts/vcs-op remote-url`; jj: `jj git remote list`) — `github.com` →
   `github`, `bitbucket.` (covers `bitbucket.org` and self-hosted servers like `bitbucket.juspay.net`) → `bitbucket`,
   otherwise `unknown`.
-- Calls `scripts/do-results init` then `scripts/do-results step sync passed ...`.
+- Calls `bash scripts/do-results init` then `bash scripts/do-results step sync passed ...`.
 - Prints `vcs=<value>`, `forge=<value>`, `branch=<value>`, `defaultBranch=<value>` on stdout for downstream steps.
 
 **Only `github` has an active code path today.** Both `bitbucket` and `unknown` cause forge-dependent steps (PR
@@ -200,7 +207,7 @@ The script handles the VCS-specific details: git creates `git branch <name> orig
 That's it — just the local branch. No commit, no push, no PR. The branch is pushed later in **commit**, and the PR is
 created in **create-pr** after all changes are done.
 
-**Verify**: `scripts/vcs-op head-revision` returns the new branch name (not master/main).
+**Verify**: `bash scripts/vcs-op head-revision` returns the new branch name (not master/main).
  
 ---
 
@@ -284,7 +291,7 @@ bash .../skills/do/scripts/vcs-op push <branch>
 ```
 
 Git: stages all changes with `git add -A`, commits with `git commit -m "..."`, pushes with
-`scripts/vcs-op push <branch>`.
+`bash scripts/vcs-op push <branch>`.
 Jujutsu: auto-snapshots the working copy, describes with `jj describe -m "..."`, pushes the bookmark with
 `jj git push --bookmark <name>`.
 
@@ -429,7 +436,7 @@ applied to working tree, not committed."
 main-model fallback. Cross-validation ran (or was correctly skipped because both reviewers returned zero findings).
 Every finding — first-pass or cross-validation — has an action recorded, either **Fix in this PR** or **No-op** (no
 defers; if the sub-agent emitted one, the audit step above flipped it to Fix in this PR). Every "Fix in this PR" finding
-has a corresponding commit on the feature branch (check via `scripts/vcs-op log-range <defaultBranch>`), except under
+has a corresponding commit on the feature branch (check via `bash scripts/vcs-op log-range <defaultBranch>`), except under
 `--no-vcs`. No unactioned findings; no deferred findings.
  
 ---
@@ -471,7 +478,7 @@ commits too.
 combined delta.
 
 **Verify**: All 3 passes clean ("All clear"). Under `--no-vcs`, the tree reflects the fixes; otherwise
-`scripts/vcs-op log-range <defaultBranch>` shows one commit per violation addressed.
+`bash scripts/vcs-op log-range <defaultBranch>` shows one commit per violation addressed.
 **If violations found** (max 3 attempts): Fix the violations (one commit per fix, as above) and re-invoke
 `/code-police`.
  
@@ -571,8 +578,8 @@ Read `.agency/do.md` and look for a `## CI command` section, plus any verificati
 
 **Never pipe CI to `tail`/`head`**, and **never append `2>&1`** — background mode captures both streams.
 
-**Active state**: Before waiting for background CI, run `scripts/do-results set active waiting`. When CI returns (
-success or failure), run `scripts/do-results set active working` before proceeding. This lets the stop hook allow
+**Active state**: Before waiting for background CI, run `bash scripts/do-results set active waiting`. When CI returns (
+success or failure), run `bash scripts/do-results set active working` before proceeding. This lets the stop hook allow
 graceful exits while the agent is idle.
 
 CI commands are typically local (e.g. `nix flake check`, `just ci`, `make ci`) and are forge-independent — **run them
@@ -672,11 +679,11 @@ attempts from done). If still failing after retries, set `status: "failed"`.
    a trivial diff).
 
 A `failed` step always blocks `"completed"`. No redefining "passed," no footnote caveats. Update via
-`scripts/do-results set status completed` or `scripts/do-results set status failed` accordingly.
+`bash scripts/do-results set status completed` or `bash scripts/do-results set status failed` accordingly.
 
 #### Timing summary
 
-Run `scripts/steps/done` in this skill's directory. It emits:
+Run `bash scripts/steps/done` in this skill's directory. It emits:
 
 1. A markdown timing table (step, status, duration, verification), with any step that took ≥30% of total time shown in *
    *bold**.
@@ -712,7 +719,7 @@ the commit/push/PR steps are theirs to run.
 the terminal only — do **not** attempt to post a PR comment. (Bitbucket `bkt pr comment` wiring is tracked in #10.)
 
 **If `forge == github`**: Report the PR URL. Then post the final step status table as a **PR comment** using
-`gh pr comment`. Use the markdown table and slowest-step line emitted by `scripts/steps/done` verbatim (strip the
+`gh pr comment`. Use the markdown table and slowest-step line emitted by `bash scripts/steps/done` verbatim (strip the
 trailing `<<<FACTS ... FACTS` block — that's internal). Format:
 
  ```
