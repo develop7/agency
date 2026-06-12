@@ -301,10 +301,10 @@
     ## Examples
 
     ```nickel
-    should_skip "branch" { active = true, status = 'running, steps = [], noVcs = true, minimal = false, review = false, forge = 'github, forgeCapabilities = { prCreate = true, prComment = true, prEdit = true, prChecks = true, prMerge = true, issueCreate = true, authed = true }, has_evidence = false, task = "test" }
+    should_skip "branch" { active = true, status = 'running, steps = [], noVcs = true, minimal = false, review = false, forge = 'github, _all_caps, has_evidence = false, task = "test" }
     # => true
 
-    should_skip "docs" { active = true, status = 'running, steps = [], noVcs = false, minimal = true, review = false, forge = 'github, forgeCapabilities = { prCreate = true, prComment = true, prEdit = true, prChecks = true, prMerge = true, issueCreate = true, authed = true }, has_evidence = false, task = "test" }
+    should_skip "docs" { active = true, status = 'running, steps = [], noVcs = false, minimal = true, review = false, forge = 'github, _all_caps, has_evidence = false, task = "test" }
     # => true
 
     should_skip "create-pr" { active = true, status = 'running, steps = [], noVcs = false, minimal = false, review = false, forge = 'bitbucket, has_evidence = false, task = "test" }
@@ -313,7 +313,7 @@
     should_skip "evidence" _test_state
     # => true
 
-    should_skip "ci" { active = true, status = 'running, steps = [], noVcs = true, minimal = false, review = false, forge = 'github, forgeCapabilities = { prCreate = true, prComment = true, prEdit = true, prChecks = true, prMerge = true, issueCreate = true, authed = true }, has_evidence = false, task = "test" }
+    should_skip "ci" { active = true, status = 'running, steps = [], noVcs = true, minimal = false, review = false, forge = 'github, _all_caps, has_evidence = false, task = "test" }
     # => false
     ```
   "%
@@ -330,13 +330,13 @@
     ## Examples
 
     ```nickel
-    get_next "check" { active = true, status = 'running, steps = [], noVcs = false, minimal = true, review = false, forge = 'github, forgeCapabilities = { prCreate = true, prComment = true, prEdit = true, prChecks = true, prMerge = true, issueCreate = true, authed = true }, has_evidence = false, task = "test" }
+    get_next "check" { active = true, status = 'running, steps = [], noVcs = false, minimal = true, review = false, forge = 'github, _all_caps, has_evidence = false, task = "test" }
     # => "fmt"
 
-    get_next "research" { active = true, status = 'running, steps = [], noVcs = false, minimal = false, review = true, forge = 'github, forgeCapabilities = { prCreate = true, prComment = true, prEdit = true, prChecks = true, prMerge = true, issueCreate = true, authed = true }, has_evidence = false, task = "test" }
+    get_next "research" { active = true, status = 'running, steps = [], noVcs = false, minimal = false, review = true, forge = 'github, _all_caps, has_evidence = false, task = "test" }
     # => "plan-approval"
 
-    get_next "fmt" { active = true, status = 'running, steps = [], noVcs = true, minimal = false, review = false, forge = 'github, forgeCapabilities = { prCreate = true, prComment = true, prEdit = true, prChecks = true, prMerge = true, issueCreate = true, authed = true }, has_evidence = false, task = "test" }
+    get_next "fmt" { active = true, status = 'running, steps = [], noVcs = true, minimal = false, review = false, forge = 'github, _all_caps, has_evidence = false, task = "test" }
     # => "hickey-lowy"
     ```
   "%
@@ -439,8 +439,8 @@
     cli _test_state
     # => { step = "sync", skip = false, pattern = 'one-shot, instructions = "nodes/sync.md", requires = [], pattern_config = {} }
 
-    cli { active = true, status = 'running, steps = [{ name = "sync", status = 'passed }], noVcs = false, minimal = false, review = false, forge = 'github, forgeCapabilities = { prCreate = true, prComment = true, prEdit = true, prChecks = true, prMerge = true, issueCreate = true, authed = true }, has_evidence = false, task = "test" }
-    # => { step = "research", skip = false, pattern = 'one-shot, instructions = "nodes/research.md", requires = ["forge"], pattern_config = {} }
+    cli { active = true, status = 'running, steps = [{ name = "sync", status = 'passed }], noVcs = false, minimal = false, review = false, forge = 'github, _all_caps, has_evidence = false, task = "test" }
+    # => { step = "research", skip = false, pattern = 'one-shot, instructions = "nodes/research.md", requires = ["forgeCapabilities"], pattern_config = {} }
     ```
   "%
     = fun state =>
@@ -491,13 +491,13 @@
     cli_seed "polish" _test_state
     # => [{ name = "sync", initial_status = 'completed }, { name = "research", initial_status = 'completed }, { name = "branch", initial_status = 'completed }, { name = "implement", initial_status = 'completed }, { name = "check", initial_status = 'completed }, { name = "docs", initial_status = 'pending }, { name = "fmt", initial_status = 'completed }, { name = "commit", initial_status = 'completed }, { name = "hickey-lowy", initial_status = 'pending }, { name = "police", initial_status = 'pending }, { name = "test", initial_status = 'pending }, { name = "create-pr", initial_status = 'pending }, { name = "ci", initial_status = 'pending }, { name = "evidence", initial_status = 'pending }, { name = "done", initial_status = 'pending }]
 
-    cli_seed "" { active = true, status = 'running, steps = [], noVcs = false, minimal = false, review = true, forge = 'github, forgeCapabilities = { prCreate = true, prComment = true, prEdit = true, prChecks = true, prMerge = true, issueCreate = true, authed = true }, has_evidence = false, task = "test" }
+    cli_seed "" { active = true, status = 'running, steps = [], noVcs = false, minimal = false, review = true, forge = 'github, _all_caps, has_evidence = false, task = "test" }
     # => [{ name = "sync", initial_status = 'pending }, { name = "research", initial_status = 'pending }, { name = "plan-approval", initial_status = 'pending }, { name = "branch", initial_status = 'pending }, { name = "implement", initial_status = 'pending }, { name = "check", initial_status = 'pending }, { name = "docs", initial_status = 'pending }, { name = "fmt", initial_status = 'pending }, { name = "commit", initial_status = 'pending }, { name = "hickey-lowy", initial_status = 'pending }, { name = "police", initial_status = 'pending }, { name = "test", initial_status = 'pending }, { name = "create-pr", initial_status = 'pending }, { name = "ci", initial_status = 'pending }, { name = "evidence", initial_status = 'pending }, { name = "done", initial_status = 'pending }]
 
-    cli_seed "" { active = true, status = 'running, steps = [], noVcs = false, minimal = true, review = false, forge = 'github, forgeCapabilities = { prCreate = true, prComment = true, prEdit = true, prChecks = true, prMerge = true, issueCreate = true, authed = true }, has_evidence = false, task = "test" }
+    cli_seed "" { active = true, status = 'running, steps = [], noVcs = false, minimal = true, review = false, forge = 'github, _all_caps, has_evidence = false, task = "test" }
     # => [{ name = "sync", initial_status = 'pending }, { name = "research", initial_status = 'pending }, { name = "branch", initial_status = 'pending }, { name = "implement", initial_status = 'pending }, { name = "check", initial_status = 'pending }, { name = "fmt", initial_status = 'pending }, { name = "commit", initial_status = 'pending }, { name = "test", initial_status = 'pending }, { name = "create-pr", initial_status = 'pending }, { name = "ci", initial_status = 'pending }, { name = "done", initial_status = 'pending }]
 
-    cli_seed "polish" { active = true, status = 'running, steps = [], noVcs = false, minimal = true, review = false, forge = 'github, forgeCapabilities = { prCreate = true, prComment = true, prEdit = true, prChecks = true, prMerge = true, issueCreate = true, authed = true }, has_evidence = false, task = "test" }
+    cli_seed "polish" { active = true, status = 'running, steps = [], noVcs = false, minimal = true, review = false, forge = 'github, _all_caps, has_evidence = false, task = "test" }
     # => [{ name = "sync", initial_status = 'completed }, { name = "research", initial_status = 'completed }, { name = "branch", initial_status = 'completed }, { name = "implement", initial_status = 'completed }, { name = "check", initial_status = 'completed }, { name = "fmt", initial_status = 'completed }, { name = "commit", initial_status = 'completed }, { name = "hickey-lowy", initial_status = 'pending }, { name = "test", initial_status = 'pending }, { name = "create-pr", initial_status = 'pending }, { name = "ci", initial_status = 'pending }, { name = "done", initial_status = 'pending }]
     ```
   "%
@@ -507,6 +507,22 @@
   # ── Test fixtures ──────────────────────────────────────────────────────────
 
   # Default state for doc tests
+  # The full capability map (every flag true). Used as the default in
+  # doc-test examples and the `_test_state` fixture. Adding a new
+  # capability flag is a 1-site change here + 1-site change in the
+  # `State.forgeCapabilities` contract (line 77-93). Doc-test examples
+  # and the fixture reference this by name, so the duplication is
+  # collapsed to a single source of truth.
+  _all_caps = {
+    prCreate = true,
+    prComment = true,
+    prEdit = true,
+    prChecks = true,
+    prMerge = true,
+    issueCreate = true,
+    authed = true,
+  },
+
   _test_state = {
     active = true,
     status = 'running,
@@ -515,15 +531,7 @@
     minimal = false,
     review = false,
     forge = 'github,
-    forgeCapabilities = {
-      prCreate = true,
-      prComment = true,
-      prEdit = true,
-      prChecks = true,
-      prMerge = true,
-      issueCreate = true,
-      authed = true,
-    },
+    forgeCapabilities = _all_caps,
     has_evidence = false,
     task = "test",
   },

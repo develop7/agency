@@ -523,8 +523,14 @@ or no relevant tests to run.
 **If `--no-vcs`**: Skip with status `skipped` and reason `"--no-vcs"`. There is no PR to create. Proceed to **ci**.
 
 **If `!state.forgeCapabilities.prCreate` (forge can't open a PR — e.g. unknown, Gitea with no upstream PR-create)**:
-Skip with status `skipped` and reason `"non-<forge> forge: <forge>"`. Proceed to **ci**. (Bitbucket `bkt pr edit`
-wiring is tracked in #10.)
+Skip with status `skipped` and reason:
+
+- `"unsupported forge (no vcs-mcp toolkit recognition)"` when `state.forge = 'unknown` (the toolkit
+  couldn't classify the remote host; "non-unknown forge: unknown" reads as gibberish, so use a distinct reason).
+- `"non-<forge.kind> forge: <forge.kind>"` otherwise (the standard string interpolation; e.g.
+  `non-bitbucket forge: bitbucket`).
+
+Proceed to **ci**. (Bitbucket `bkt pr edit` wiring is tracked in #10.)
 
 **If `state.forgeCapabilities.prCreate` (forge can open a PR — typically GitHub today)**:
 
@@ -631,8 +637,9 @@ without baking the mechanism into agency.
 
 **If `--no-vcs`**: Skip with status `skipped` and reason `"--no-vcs"`. There is no PR to attach evidence to.
 
-**If `!state.forgeCapabilities.prComment` (forge can't post PR comments)**: Skip with status `skipped` and reason
-`"non-<forge> forge: <forge>"`. (Bitbucket comment wiring is tracked in #10.)
+**If `!state.forgeCapabilities.prComment` (forge can't post PR comments)**: Skip with status `skipped` and
+reason `"unsupported forge (no vcs-mcp toolkit recognition)"` when `state.forge = 'unknown`, otherwise
+`"non-<forge.kind> forge: <forge.kind>"`. (Bitbucket comment wiring is tracked in #10.)
 
 **Otherwise**: Read `.agency/do.md` and look for a `## PR evidence` section. If `.agency/do.md` is missing, or the
 section is missing or empty, skip with status `skipped` and reason `"no PR evidence section in .agency/do.md"` — the
