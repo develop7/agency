@@ -11,6 +11,7 @@
 !/LICENSE
 !/README.md
 !/opencode.json
+!/opencode.json.README.md
 
 # APM dependencies
 apm_modules/

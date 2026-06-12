@@ -4,9 +4,18 @@ description: Near-autonomous workflow for coding agents — talk, do, and qualit
 author: srid
 license: MIT
 type: hybrid
-# Pin the opencode target explicitly. Without this, `apm install` auto-detects
-# `.agents/` as a claude signal and refuses to run with "Multiple harnesses
-# detected". The opencode host is the one that reads `opencode.json` (project
-# root) and consumes the vcs-mcp MCP server declared there.
+# Pin `opencode` as the deployment target. The `.agents/` directory
+# (which `apm install` deploys skills into) is detected as a claude
+# signal by upstream apm's auto-detect heuristic, so without the pin
+# `apm install` aborts with "Multiple harnesses detected: claude, opencode".
+# This is a workaround for an upstream detection bug, not a deliberate
+# architectural choice. Re-introducing claude/codex as supported targets
+# is a planned Stage once upstream apm distinguishes `.agents/` from
+# `.claude/` (apm issue tracker).
+#
+# Other hosts (claude, codex) remain supported by the *agency* package at
+# the source repo; this checkout deploys to opencode only, because the
+# vcs-mcp MCP server config (`opencode.json`, project root) is the
+# opencode-specific seam.
 targets:
   - opencode
