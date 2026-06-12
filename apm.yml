@@ -4,3 +4,9 @@ description: Near-autonomous workflow for coding agents — talk, do, and qualit
 author: srid
 license: MIT
 type: hybrid
+# Pin the opencode target explicitly. Without this, `apm install` auto-detects
+# `.agents/` as a claude signal and refuses to run with "Multiple harnesses
+# detected". The opencode host is the one that reads `opencode.json` (project
+# root) and consumes the vcs-mcp MCP server declared there.
+targets:
+  - opencode
