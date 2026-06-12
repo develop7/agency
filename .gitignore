@@ -10,6 +10,7 @@
 !/justfile
 !/LICENSE
 !/README.md
+!/opencode.json
 
 # APM dependencies
 apm_modules/
