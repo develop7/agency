@@ -12,7 +12,7 @@ description: Timing summary, optimization suggestions, and wrap-up.
 ## Ensures
 
 - Timing table emitted
-- Final PR comment posted (if github)
+- Final PR comment posted (if `forgeCapabilities.prCreate && forgeCapabilities.prComment` — i.e. the forge supports opening a PR and posting a comment)
 - Workflow status set to completed or failed
 
 ## Strategies
@@ -57,6 +57,6 @@ Be specific to this run's data, not generic advice.
 
 **If `--no-vcs`**: Print the timing table and optimization suggestions to the terminal only. List files modified in the working tree (`bash scripts/vcs-op dirty`). Remind the user that changes are uncommitted.
 
-**If `forge != github`**: Report the branch name (and remote URL via `bash scripts/vcs-op remote-url`). Print timing table and suggestions to the terminal only.
+**If `!(forgeCapabilities.prCreate && forgeCapabilities.prComment)` (forge can't open a PR or post a comment)**: Report the branch name (and remote URL via `bash scripts/vcs-op remote-url`). Print timing table and suggestions to the terminal only. The skip-on-non-GitHub-forge rule (`"non-<forge> forge: <forge>"` reason) was enforced by the `create-pr` skip predicate (`!state.forgeCapabilities.prCreate`), so the PR was never opened.
 
-**If `forge == github`**: Report the PR URL. Then post the final step status table as a **PR comment** using `gh pr comment`.
+**If `forgeCapabilities.prCreate && forgeCapabilities.prComment` (forge supports PR + comment, e.g. GitHub)**: Report the PR URL. Then post the final step status table as a **PR comment** using `mcp__vcs__forge_pr_comment`.

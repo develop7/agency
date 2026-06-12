@@ -170,9 +170,7 @@ see [srid/agency#10](https://github.com/srid/agency/issues/10).
 
 Research the task thoroughly before writing code.
 
-- If given a GitHub issue URL **and** `forge == github`, fetch with `gh issue view`. On non-GitHub forges, treat any
-  issue-like URL as opaque context — use the prompt text as-is and do not attempt to fetch. (Bitbucket issue/Jira
-  fetching is tracked in #10.)
+- If given a GitHub issue URL **and** the forge is GitHub (the issue body can be fetched — `mcp__vcs__forge_pr_view` is the toolkit-level read path; issue-view is on the same surface), fetch the issue. On non-GitHub forges, treat any issue-like URL as opaque context — use the prompt text as-is and do not attempt to fetch. (Bitbucket issue/Jira fetching is tracked in #10.)
 - **Never assume** how something works. Read the code. Check the config.
 - If the prompt involves external tools/libraries, prefer `git clone` to a scratch dir (e.g. `/tmp/<name>`) at the
   version the project actually uses, then read the source on disk with `Read`/`Grep`/`Glob`. Fall back to `WebSearch`/
@@ -524,10 +522,11 @@ or no relevant tests to run.
 
 **If `--no-vcs`**: Skip with status `skipped` and reason `"--no-vcs"`. There is no PR to create. Proceed to **ci**.
 
-**If `forge != github`**: Skip with status `skipped` and reason `"non-<forge> forge: <forge>"`. (Bitbucket `bkt pr edit`
-wiring is tracked in #10.) Proceed to **ci**.
+**If `!state.forgeCapabilities.prCreate` (forge can't open a PR — e.g. unknown, Gitea with no upstream PR-create)**:
+Skip with status `skipped` and reason `"non-<forge> forge: <forge>"`. Proceed to **ci**. (Bitbucket `bkt pr edit`
+wiring is tracked in #10.)
 
-**If `forge == github`**:
+**If `state.forgeCapabilities.prCreate` (forge can open a PR — typically GitHub today)**:
 
 Check whether a PR already exists for this branch (`gh pr view`).
 
@@ -597,8 +596,8 @@ graceful exits while the agent is idle.
 
 CI commands are typically local (e.g. `nix flake check`, `just ci`, `make ci`) and are forge-independent — **run them
 regardless of forge**. Only the *verification method* may be forge-specific: if `.agency/do.md` describes verification
-via `gh` commit-status checks and `forge != github`, fall back to exit code + command output for verification on
-non-GitHub forges, and note this in the step record. (Bitbucket `bkt pr checks` wiring is tracked in #10.)
+via `gh` commit-status checks and `!state.forgeCapabilities.prChecks`, fall back to exit code + command output for verification
+on forges without a checks command, and note this in the step record. (Bitbucket `bkt pr checks` wiring is tracked in #10.)
 
 **Verify**: Use the verification method described in `.agency/do.md` (e.g., checking commit statuses on GitHub, reading
 CI output elsewhere). If no CI command is documented, skip with a note. **The CI result must cover `HEAD`.** Before
@@ -632,8 +631,8 @@ without baking the mechanism into agency.
 
 **If `--no-vcs`**: Skip with status `skipped` and reason `"--no-vcs"`. There is no PR to attach evidence to.
 
-**If `forge != github`**: Skip with status `skipped` and reason `"non-<forge> forge: <forge>"`. (Bitbucket comment
-wiring is tracked in #10.)
+**If `!state.forgeCapabilities.prComment` (forge can't post PR comments)**: Skip with status `skipped` and reason
+`"non-<forge> forge: <forge>"`. (Bitbucket comment wiring is tracked in #10.)
 
 **Otherwise**: Read `.agency/do.md` and look for a `## PR evidence` section. If `.agency/do.md` is missing, or the
 section is missing or empty, skip with status `skipped` and reason `"no PR evidence section in .agency/do.md"` — the
@@ -727,12 +726,14 @@ the terminal only. List the files modified in the working tree via `.../skills/d
 VCS-appropriate status output so the user can see what the agent touched. Remind the user that changes are uncommitted —
 the commit/push/PR steps are theirs to run.
 
-**If `forge != github`**: Report the branch name (and remote URL, if available via
+**If `!(state.forgeCapabilities.prCreate && state.forgeCapabilities.prComment)` (forge can't open a PR or post a comment)**:
+Report the branch name (and remote URL, if available via
 `.../skills/do/scripts/vcs-op remote-url`) instead of a PR URL. Print the timing table and optimization suggestions to
 the terminal only — do **not** attempt to post a PR comment. (Bitbucket `bkt pr comment` wiring is tracked in #10.)
 
-**If `forge == github`**: Report the PR URL. Then post the final step status table as a **PR comment** using
-`gh pr comment`. Use the markdown table and slowest-step line emitted by `bash scripts/steps/done` verbatim (strip the
+**If `state.forgeCapabilities.prCreate && state.forgeCapabilities.prComment` (forge supports PR + comment, e.g. GitHub)**:
+Report the PR URL. Then post the final step status table as a **PR comment** using
+`mcp__vcs__forge_pr_comment`. Use the markdown table and slowest-step line emitted by `bash scripts/steps/done` verbatim (strip the
 trailing `<<<FACTS ... FACTS` block — that's internal). Format:
 
  ```

@@ -1,25 +1,52 @@
 # /do workflow's sync step — extracted to a script to collapse several Bash
-# round-trips into one. Handles fetch, fast-forward, forge detection, dirty-
-# tree hint, and initial results bookkeeping. VCS-agnostic: delegates to
-# scripts/vcs-op.
+# round-trips into one. Handles fetch, fast-forward, dirty-tree hint, and
+# initial results bookkeeping. VCS-agnostic: delegates to scripts/vcs-op.
+# Forge-agnostic: takes the vcs-mcp `forge_info` JSON as a CLI arg (the
+# agent calls the MCP tool and passes the result).
 #
 # Usage:
-#   sync <noVcs>
-#     <noVcs>  "true" or "false" — whether --no-vcs was passed
+#   sync <noVcs> --forge-info <json>
+#     <noVcs>      "true" or "false" — whether --no-vcs was passed
+#     <json>       output of mcp__vcs__forge_info:
+#                  { kind: "github"|"gitlab"|"gitea"|"unknown",
+#                    capabilities: { prCreate, prComment, prEdit,
+#                                     prChecks, prMerge, issueCreate,
+#                                     authed } }
 #
 # Stdout (for the agent to parse):
 #   vcs=<jj|git|unknown>
-#   forge=<github|bitbucket|unknown>
+#   forge=<github|gitlab|gitea|bitbucket|unknown>
+#   forgeCapabilities=<json>          (echoed back, for downstream steps)
 #   branch=<current branch name>
 #   defaultBranch=<origin HEAD ref name>
 
 set -euo pipefail
 
-noVcs="${1:?Usage: sync <noVcs>  (true|false)}"
-case "$noVcs" in
-  true|false) ;;
-  *) echo "sync: noVcs must be 'true' or 'false', got '$noVcs'" >&2; exit 2 ;;
-esac
+noVcs=""
+forge_info_json=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --forge-info)
+      forge_info_json="${2:?--forge-info requires a JSON argument}"
+      shift 2
+      ;;
+    true|false)
+      noVcs="$1"
+      shift
+      ;;
+    *)
+      echo "sync: unknown argument: $1" >&2
+      echo "Usage: sync <noVcs> --forge-info <json>" >&2
+      exit 2
+      ;;
+  esac
+done
+
+if [ -z "$noVcs" ] || [ -z "$forge_info_json" ]; then
+  echo "sync: missing required arguments" >&2
+  echo "Usage: sync <noVcs> --forge-info <json>" >&2
+  exit 2
+fi
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DO_RESULTS="$SCRIPT_DIR/../do-results"
@@ -63,21 +90,35 @@ if [ "$noVcs" = "false" ] && bash "$VCS_OP" dirty; then
   echo "Dirty tree detected. Continuing will create a fresh branch on top of these changes. If you wanted the agent to extend your WIP in place without touching git, re-run with --no-vcs." >&2
 fi
 
-# Forge detection from origin URL
-origin_url="$(bash "$VCS_OP" remote-url)"
-case "$origin_url" in
-  *github.com*)  forge="github" ;;
-  *bitbucket.*)  forge="bitbucket" ;;
-  *)             forge="unknown" ;;
-esac
+# Parse forge identity and capabilities from the vcs-mcp forge_info JSON.
+# The agent (an LLM with MCP tool access) called mcp__vcs__forge_info and
+# passed the JSON. We extract:
+#   - forge: the identity string ("github" | "gitlab" | "gitea" | "unknown")
+#   - forgeCapabilities: the per-op capability map
+#
+# jq is the parser. If jq is unavailable, we try `nix run nixpkgs#jq` as a
+# fallback (matching the detection path in scripts/vcs-op:42-47).
+jq_cmd="jq"
+if ! command -v jq &>/dev/null; then
+  if command -v nix &>/dev/null; then
+    jq_cmd="nix run nixpkgs#jq --"
+  else
+    echo "sync: jq is required to parse forge_info JSON; install jq or nix" >&2
+    exit 3
+  fi
+fi
 
-# Initialize results, stash /do-specific top-level fields (vcs, forge, noVcs)
-# via the generic `set` command, then record the sync step. Suppress do-results'
-# stdout confirmations — sync emits its own vcs/forge/branch/defaultBranch
+forge="$($jq_cmd -r '.kind // "unknown"' <<<"$forge_info_json")"
+capabilities="$($jq_cmd -c '.capabilities // {}' <<<"$forge_info_json")"
+
+# Initialize results, stash /do-specific top-level fields (vcs, forge,
+# forgeCapabilities, noVcs) via the generic `set` command, then record the
+# sync step. Suppress do-results' stdout confirmations — sync emits its own
 # protocol below and shouldn't pollute it with do-results' echo lines.
 [ -f ".do-results.json" ] || bash "$DO_RESULTS" init >/dev/null
 bash "$DO_RESULTS" set vcs "$vcs" >/dev/null
 bash "$DO_RESULTS" set forge "$forge" >/dev/null
+bash "$DO_RESULTS" set forgeCapabilities "$capabilities" >/dev/null
 bash "$DO_RESULTS" set noVcs "$noVcs" >/dev/null
 bash "$DO_RESULTS" step sync passed \
   "fetch ok; vcs=$vcs; forge=$forge; noVcs=$noVcs" \
@@ -89,5 +130,6 @@ default_ref="$(bash "$VCS_OP" default-branch)"
 
 echo "vcs=$vcs"
 echo "forge=$forge"
+echo "forgeCapabilities=$capabilities"
 echo "branch=$branch"
 echo "defaultBranch=$default_ref"

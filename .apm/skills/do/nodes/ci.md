@@ -29,7 +29,7 @@ Read `.agency/do.md` and look for a `## CI command` section, plus any verificati
 
 **Active state**: Before waiting for background CI, run `bash scripts/do-results set active waiting`. When CI returns, run `bash scripts/do-results set active working` before proceeding.
 
-CI commands are typically local (e.g. `nix flake check`, `just ci`, `make ci`) and are **forge-independent — run them regardless of forge**. Only the *verification method* may be forge-specific: if `.agency/do.md` describes verification via `gh` commit-status checks and `forge != github`, fall back to exit code + command output.
+CI commands are typically local (e.g. `nix flake check`, `just ci`, `make ci`) and are **forge-independent — run them regardless of forge**. Only the *verification method* may be forge-specific: if `.agency/do.md` describes verification via `gh` commit-status checks and `!forgeCapabilities.prChecks`, fall back to exit code + command output.
 
 **Verify coverage of `HEAD`.** Before recording the step as passed, compare the commit SHA CI ran against with `bash scripts/vcs-op head-commit-sha`. If they differ, **re-run CI against the current HEAD**. CI passing on a stale commit does not satisfy verification.
 

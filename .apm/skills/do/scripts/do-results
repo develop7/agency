@@ -134,10 +134,19 @@ ENDJSON
   set)
     field="${1:?field required}"
     value="${2:?value required}"
-    # Handle booleans and strings
+    # Handle booleans, JSON values (objects/arrays), and strings.
+    # JSON values must use --argjson (not --arg) so jq parses them as
+    # structured types rather than as literal strings; otherwise the
+    # workflow's state contract (which expects a record) breaks.
     if [ "$value" = "true" ] || [ "$value" = "false" ]; then
       # shellcheck disable=SC2016  # jq filter with $arg
       $JQ --arg f "$field" --argjson v "$value" '.[$f] = $v' "$FILE" > "${FILE}.tmp" && mv "${FILE}.tmp" "$FILE"
+    elif [ "${value:0:1}" = "{" ] || [ "${value:0:1}" = "[" ]; then
+      # Structured JSON: validate by piping through jq first (parse + re-emit
+      # compact form), then store with --argjson.
+      normalized="$(printf '%s' "$value" | $JQ -c '.')"
+      # shellcheck disable=SC2016  # jq filter with $arg
+      $JQ --arg f "$field" --argjson v "$normalized" '.[$f] = $v' "$FILE" > "${FILE}.tmp" && mv "${FILE}.tmp" "$FILE"
     else
       # shellcheck disable=SC2016  # jq filter with $arg
       $JQ --arg f "$field" --arg v "$value" '.[$f] = $v' "$FILE" > "${FILE}.tmp" && mv "${FILE}.tmp" "$FILE"

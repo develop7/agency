@@ -68,7 +68,29 @@
     raw
       | {
         steps | Array { name | String, status | std.enum.TagOrString, .. },
+        # `forge` is the forge identity (github|gitlab|gitea|bitbucket|unknown),
+        # kept for diagnostic/display. Skip predicates reason about
+        # `forgeCapabilities` (the load-bearing field) — the vcs-mcp
+        # `forge_info` MCP tool populates it, and the bash `scripts/steps/sync`
+        # script writes it into state.
         forge | std.enum.TagOrString,
+        forgeCapabilities | {
+          prCreate | Bool,
+          prComment | Bool,
+          prEdit | Bool,
+          prChecks | Bool,
+          prMerge | Bool,
+          issueCreate | Bool,
+          authed | Bool,
+        } | default = {
+          prCreate = false,
+          prComment = false,
+          prEdit = false,
+          prChecks = false,
+          prMerge = false,
+          issueCreate = false,
+          authed = false,
+        },
         noVcs | Bool,
         minimal | Bool,
         review | Bool | default = false,
@@ -105,7 +127,7 @@
       next | not_exported = fun state =>
         if state.review then "plan-approval" else "branch",
       skip_when | not_exported = fun state => false,
-      requires = ["forge"],
+      requires = ["forgeCapabilities"],
       instructions = "nodes/research.md",
     },
 
@@ -195,8 +217,8 @@
       pattern = 'one-shot,
       next = "ci",
       skip_when | not_exported = fun state =>
-        state.noVcs || state.forge != 'github,
-      requires = ["forge"],
+        state.noVcs || !state.forgeCapabilities.prCreate,
+      requires = ["forgeCapabilities"],
       instructions = "nodes/create-pr.md",
     },
 
@@ -212,7 +234,7 @@
       pattern = 'one-shot,
       next = "done",
       skip_when | not_exported = fun state => !state.has_evidence,
-      requires = ["forge"],
+      requires = ["forgeCapabilities"],
       instructions = "nodes/evidence.md",
     },
 
@@ -279,10 +301,10 @@
     ## Examples
 
     ```nickel
-    should_skip "branch" { active = true, status = 'running, steps = [], noVcs = true, minimal = false, review = false, forge = 'github, has_evidence = false, task = "test" }
+    should_skip "branch" { active = true, status = 'running, steps = [], noVcs = true, minimal = false, review = false, forge = 'github, forgeCapabilities = { prCreate = true, prComment = true, prEdit = true, prChecks = true, prMerge = true, issueCreate = true, authed = true }, has_evidence = false, task = "test" }
     # => true
 
-    should_skip "docs" { active = true, status = 'running, steps = [], noVcs = false, minimal = true, review = false, forge = 'github, has_evidence = false, task = "test" }
+    should_skip "docs" { active = true, status = 'running, steps = [], noVcs = false, minimal = true, review = false, forge = 'github, forgeCapabilities = { prCreate = true, prComment = true, prEdit = true, prChecks = true, prMerge = true, issueCreate = true, authed = true }, has_evidence = false, task = "test" }
     # => true
 
     should_skip "create-pr" { active = true, status = 'running, steps = [], noVcs = false, minimal = false, review = false, forge = 'bitbucket, has_evidence = false, task = "test" }
@@ -291,13 +313,13 @@
     should_skip "evidence" _test_state
     # => true
 
-    should_skip "ci" { active = true, status = 'running, steps = [], noVcs = true, minimal = false, review = false, forge = 'github, has_evidence = false, task = "test" }
+    should_skip "ci" { active = true, status = 'running, steps = [], noVcs = true, minimal = false, review = false, forge = 'github, forgeCapabilities = { prCreate = true, prComment = true, prEdit = true, prChecks = true, prMerge = true, issueCreate = true, authed = true }, has_evidence = false, task = "test" }
     # => false
     ```
   "%
     = fun step_name state =>
       let step_def = Steps."%{step_name}" in
-      step_def.skip_when state,
+      step_def.skip_when (normalize_state state),
 
   # Get next step name (resolves function or returns static string)
   get_next
@@ -308,13 +330,13 @@
     ## Examples
 
     ```nickel
-    get_next "check" { active = true, status = 'running, steps = [], noVcs = false, minimal = true, review = false, forge = 'github, has_evidence = false, task = "test" }
+    get_next "check" { active = true, status = 'running, steps = [], noVcs = false, minimal = true, review = false, forge = 'github, forgeCapabilities = { prCreate = true, prComment = true, prEdit = true, prChecks = true, prMerge = true, issueCreate = true, authed = true }, has_evidence = false, task = "test" }
     # => "fmt"
 
-    get_next "research" { active = true, status = 'running, steps = [], noVcs = false, minimal = false, review = true, forge = 'github, has_evidence = false, task = "test" }
+    get_next "research" { active = true, status = 'running, steps = [], noVcs = false, minimal = false, review = true, forge = 'github, forgeCapabilities = { prCreate = true, prComment = true, prEdit = true, prChecks = true, prMerge = true, issueCreate = true, authed = true }, has_evidence = false, task = "test" }
     # => "plan-approval"
 
-    get_next "fmt" { active = true, status = 'running, steps = [], noVcs = true, minimal = false, review = false, forge = 'github, has_evidence = false, task = "test" }
+    get_next "fmt" { active = true, status = 'running, steps = [], noVcs = true, minimal = false, review = false, forge = 'github, forgeCapabilities = { prCreate = true, prComment = true, prEdit = true, prChecks = true, prMerge = true, issueCreate = true, authed = true }, has_evidence = false, task = "test" }
     # => "hickey-lowy"
     ```
   "%
@@ -417,7 +439,7 @@
     cli _test_state
     # => { step = "sync", skip = false, pattern = 'one-shot, instructions = "nodes/sync.md", requires = [], pattern_config = {} }
 
-    cli { active = true, status = 'running, steps = [{ name = "sync", status = 'passed }], noVcs = false, minimal = false, review = false, forge = 'github, has_evidence = false, task = "test" }
+    cli { active = true, status = 'running, steps = [{ name = "sync", status = 'passed }], noVcs = false, minimal = false, review = false, forge = 'github, forgeCapabilities = { prCreate = true, prComment = true, prEdit = true, prChecks = true, prMerge = true, issueCreate = true, authed = true }, has_evidence = false, task = "test" }
     # => { step = "research", skip = false, pattern = 'one-shot, instructions = "nodes/research.md", requires = ["forge"], pattern_config = {} }
     ```
   "%
@@ -469,13 +491,13 @@
     cli_seed "polish" _test_state
     # => [{ name = "sync", initial_status = 'completed }, { name = "research", initial_status = 'completed }, { name = "branch", initial_status = 'completed }, { name = "implement", initial_status = 'completed }, { name = "check", initial_status = 'completed }, { name = "docs", initial_status = 'pending }, { name = "fmt", initial_status = 'completed }, { name = "commit", initial_status = 'completed }, { name = "hickey-lowy", initial_status = 'pending }, { name = "police", initial_status = 'pending }, { name = "test", initial_status = 'pending }, { name = "create-pr", initial_status = 'pending }, { name = "ci", initial_status = 'pending }, { name = "evidence", initial_status = 'pending }, { name = "done", initial_status = 'pending }]
 
-    cli_seed "" { active = true, status = 'running, steps = [], noVcs = false, minimal = false, review = true, forge = 'github, has_evidence = false, task = "test" }
+    cli_seed "" { active = true, status = 'running, steps = [], noVcs = false, minimal = false, review = true, forge = 'github, forgeCapabilities = { prCreate = true, prComment = true, prEdit = true, prChecks = true, prMerge = true, issueCreate = true, authed = true }, has_evidence = false, task = "test" }
     # => [{ name = "sync", initial_status = 'pending }, { name = "research", initial_status = 'pending }, { name = "plan-approval", initial_status = 'pending }, { name = "branch", initial_status = 'pending }, { name = "implement", initial_status = 'pending }, { name = "check", initial_status = 'pending }, { name = "docs", initial_status = 'pending }, { name = "fmt", initial_status = 'pending }, { name = "commit", initial_status = 'pending }, { name = "hickey-lowy", initial_status = 'pending }, { name = "police", initial_status = 'pending }, { name = "test", initial_status = 'pending }, { name = "create-pr", initial_status = 'pending }, { name = "ci", initial_status = 'pending }, { name = "evidence", initial_status = 'pending }, { name = "done", initial_status = 'pending }]
 
-    cli_seed "" { active = true, status = 'running, steps = [], noVcs = false, minimal = true, review = false, forge = 'github, has_evidence = false, task = "test" }
+    cli_seed "" { active = true, status = 'running, steps = [], noVcs = false, minimal = true, review = false, forge = 'github, forgeCapabilities = { prCreate = true, prComment = true, prEdit = true, prChecks = true, prMerge = true, issueCreate = true, authed = true }, has_evidence = false, task = "test" }
     # => [{ name = "sync", initial_status = 'pending }, { name = "research", initial_status = 'pending }, { name = "branch", initial_status = 'pending }, { name = "implement", initial_status = 'pending }, { name = "check", initial_status = 'pending }, { name = "fmt", initial_status = 'pending }, { name = "commit", initial_status = 'pending }, { name = "test", initial_status = 'pending }, { name = "create-pr", initial_status = 'pending }, { name = "ci", initial_status = 'pending }, { name = "done", initial_status = 'pending }]
 
-    cli_seed "polish" { active = true, status = 'running, steps = [], noVcs = false, minimal = true, review = false, forge = 'github, has_evidence = false, task = "test" }
+    cli_seed "polish" { active = true, status = 'running, steps = [], noVcs = false, minimal = true, review = false, forge = 'github, forgeCapabilities = { prCreate = true, prComment = true, prEdit = true, prChecks = true, prMerge = true, issueCreate = true, authed = true }, has_evidence = false, task = "test" }
     # => [{ name = "sync", initial_status = 'completed }, { name = "research", initial_status = 'completed }, { name = "branch", initial_status = 'completed }, { name = "implement", initial_status = 'completed }, { name = "check", initial_status = 'completed }, { name = "fmt", initial_status = 'completed }, { name = "commit", initial_status = 'completed }, { name = "hickey-lowy", initial_status = 'pending }, { name = "test", initial_status = 'pending }, { name = "create-pr", initial_status = 'pending }, { name = "ci", initial_status = 'pending }, { name = "done", initial_status = 'pending }]
     ```
   "%
@@ -493,6 +515,15 @@
     minimal = false,
     review = false,
     forge = 'github,
+    forgeCapabilities = {
+      prCreate = true,
+      prComment = true,
+      prEdit = true,
+      prChecks = true,
+      prMerge = true,
+      issueCreate = true,
+      authed = true,
+    },
     has_evidence = false,
     task = "test",
   },
