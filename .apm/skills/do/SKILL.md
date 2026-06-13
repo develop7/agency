@@ -540,18 +540,43 @@ Proceed to **ci**. (Bitbucket `bkt pr edit` wiring is tracked in #10.)
 
 **If `state.forgeCapabilities.prCreate` (forge can open a PR — typically GitHub today)**:
 
-Check whether a PR already exists for this branch (`gh pr view`).
+Check whether a PR already exists for this branch:
+
+```
+mcp__vcs__forge_pr_view
+  number: <the PR number, if known>
+```
+
+If the call errors with "not found" (the toolkit surfaces this as
+`Error::InvalidInput` for missing PRs), there's no PR yet.
 
 **If no PR exists** (first run, normal path):
 
-1. Create a draft PR: `gh pr create --draft`
+1. Create a draft PR:
+
+   ```
+   mcp__vcs__forge_pr_create
+     title: "<the title>"
+     body: "<the body markdown>"
+     source: "<current branch name>"
+     target: "<default branch name>"
+   ```
 
    **MANDATORY**: Load the `forge-pr` skill (via Skill tool) BEFORE writing the PR title/body.
 
-2. **Post hickey/lowy results**: Post the hickey and lowy analysis as a PR comment using `gh pr comment` with a
-   `## [Hickey/Lowy](https://kolu.dev/blog/hickey-lowy/) Analysis` header (the heading links to the blog post explaining
-   the two lenses, mirroring how the final step status comment links `/do` to the agency repo). Always post when the
-   steps ran — reviewers should see the structural analysis even if every finding was a No-op.
+2. **Post hickey/lowy results**: Post the hickey and lowy analysis as a PR comment using:
+
+   ```
+   mcp__vcs__forge_pr_comment
+     number: <the new PR number>
+     body: "## [Hickey/Lowy](https://kolu.dev/blog/hickey-lowy/) Analysis\n\n<markdown>"
+   ```
+
+   (The MCP tool's body parameter is a JSON string; the old single-quoted heredoc
+   pattern that the bash `gh pr comment --body "$(cat <<'EOF' ... EOF)"` form
+   required is no longer necessary — the body is a JSON string, and shell
+   substitution doesn't apply. The toolkit's `guard_argv_field` rejects
+   `--`-prefixed bodies.)
 
    **Format the comment with a leading findings ledger.** Compose a single table from both sub-agents' Actions
    sections — one row per finding — so a reviewer can see disposition at a glance without parsing paragraphs. Put each
@@ -583,15 +608,25 @@ Check whether a PR already exists for this branch (`gh pr view`).
 
 **If PR already exists** (followup runs, `--from` entry points):
 
-Re-check the PR title/body against current scope. If scope changed, update via `gh pr edit` per the `forge-pr` skill.
+Re-check the PR title/body against current scope. If scope changed, update via:
+
+```
+mcp__vcs__forge_pr_edit
+  number: <the PR number>
+  title: "<new title, or omit to leave title alone>"
+  body: "<new body, or omit to leave body alone>"
+```
+
+(At least one of `title` or `body` must be set per the toolkit's contract; the
+facade rejects both-absent with `invalid_params` BEFORE any spawn.)
 
 **Why this runs before `ci`**: The draft PR is the canonical home for CI status. Opening it before CI runs means CI
 checks land directly on the PR, reviewers see the run history as it happens, and a failing run doesn't leave an orphaned
 branch with red statuses and no PR to explain them. If retries exhaust in **ci**, the draft PR remains as the artifact
 of the failed attempt — visible, reviewable, and ready to resume via `--from ci-only`.
 
-**Verify**: Draft PR exists (`gh pr view` succeeds), PR title/body matches the delivered scope, hickey/lowy findings
-posted if any.
+**Verify**: `mcp__vcs__forge_pr_view` succeeds with the new PR's number; PR title/body matches the delivered scope;
+hickey/lowy findings posted if any.
  
 ---
 
@@ -668,24 +703,27 @@ The sub-agent prompt should include:
   data inline, etc.) suitable for posting under a `## Evidence` heading. The sub-agent should not post the comment
   itself — only return the markdown.
 
-After the sub-agent returns, post its output as one PR comment using `gh pr comment` under a `## Evidence` heading. Use
-the **single-quoted heredoc** pattern (see `forge-pr` → "Passing the body to `gh` safely") so backticks and `$` survive
-unescaped:
+After the sub-agent returns, post its output as one PR comment using:
+
+```
+mcp__vcs__forge_pr_comment
+  number: <the PR number>
+  body: "## Evidence\n\n<markdown returned by the sub-agent>"
+```
+
+(The MCP tool's body parameter is a JSON string, not a shell string — the old
+single-quoted heredoc discipline that the bash `gh pr comment --body
+"$(cat <<'EOF' ... EOF)"` form required is no longer necessary.)
 
  ```sh
- gh pr comment --body "$(cat <<'EOF'
- ## Evidence
- 
- <markdown returned by the sub-agent>
- EOF
- )"
+ (The MCP tool's body parameter is a JSON string, not a shell string.)
  ```
 
-Embed image/asset URLs inline in the markdown — `gh pr comment` itself cannot attach files; the workflow section is
+Embed image/asset URLs inline in the markdown — `mcp__vcs__forge_pr_comment` cannot attach files; the workflow section is
 responsible for telling the sub-agent how to host any binary artifacts so they end up referenceable.
 
 **Verify**: Either the step was skipped per the rules above, or a `## Evidence` PR comment exists (
-`gh pr view --comments` or equivalent) populated from the sub-agent's output.
+`mcp__vcs__forge_pr_view` followed by inspecting the response's comment list) populated from the sub-agent's output.
  
 ---
 
@@ -746,28 +784,35 @@ the terminal only — do **not** attempt to post a PR comment. (Bitbucket `bkt p
 
 **If `state.forgeCapabilities.prCreate && state.forgeCapabilities.prComment` (forge supports PR + comment, e.g. GitHub)**:
 Report the PR URL. Then post the final step status table as a **PR comment** using
-`mcp__vcs__forge_pr_comment`. Use the markdown table and slowest-step line emitted by `bash scripts/steps/done` verbatim (strip the
-trailing `<<<FACTS ... FACTS` block — that's internal). Format:
+`mcp__vcs__forge_pr_comment` with the markdown table and slowest-step line emitted by `bash scripts/steps/done` verbatim
+(strip the trailing `<<<FACTS ... FACTS` block — that's internal):
 
- ```
- gh pr comment --body "$(cat <<'COMMENT'
- ## [`/do`](https://github.com/srid/agency) results
- 
- | Step | Status | Duration | Verification |
- |------|--------|----------|-------------|
- | sync | ✓ | 3s | ... |
- | research | ✓ | 45s | ... |
- ...
- | **Total** | | **4m 32s** | |
- 
- ### Optimization suggestions
- 
- - <2–4 concrete suggestions based on timing data>
- 
- Workflow completed at <timestamp>.
- COMMENT
- )"
- ```
+```
+mcp__vcs__forge_pr_comment
+  number: <the PR number>
+  body: |
+    ## [`/do`](https://github.com/srid/agency) results
+
+    | Step | Status | Duration | Verification |
+    |------|--------|----------|-------------|
+    | sync | ✓ | 3s | ... |
+    | research | ✓ | 45s | ... |
+    ...
+    | **Total** | | **4m 32s** | |
+
+    ### Optimization suggestions
+
+    - <2–4 concrete suggestions based on timing data>
+
+    Workflow completed at <timestamp>.
+```
+
+The toolkit's `guard_argv_field` rejects `--`-prefixed bodies (a second line of
+defence behind the wrappers' `reject_flag_like`). Empty body is a real value
+(passes through). The single-quoted heredoc discipline that the old `gh pr
+comment --body "$(cat <<'EOF' ... EOF)"` form required is no longer necessary —
+the MCP tool's body parameter is a JSON string, and shell substitution doesn't
+apply.
 
  
 ---
