@@ -118,9 +118,44 @@ for skill_file in "$SKILLS_DIR"/*/SKILL.md; do
   done
 done
 
+# ── Allowlist drift check ─────────────────────────────────────────────────────
+# The `opencode.json` `--allow-tools` allowlist is the runtime gate for MCP
+# tool calls. The workflow's skill markdown references MCP tools by name (e.g.
+# `mcp__vcs__repo_commit`, `mcp__vcs__forge_pr_view`). When a tool is referenced
+# in the prose but is NOT in the allowlist, the agent's call fails at runtime
+# — a documented safety violation (see
+# `.apm/instructions/apm-sources.instructions.md:30-44`). This check greps the
+# prose for `mcp__vcs__<tool>` references, extracts the tool name, and verifies
+# each is in the allowlist.
+
+if [ -f "$APM_DIR/../opencode.json" ]; then
+  allowlist_tools="$(grep -oE -- '(repo|forge)_[a-z_]+' "$APM_DIR/../opencode.json" | sort -u)"
+  for skill_file in "$SKILLS_DIR"/*/SKILL.md "$SKILLS_DIR"/*/nodes/*.md; do
+    [ -f "$skill_file" ] || continue
+    # Non-strict skips for files that document tools without calling them.
+    case "$skill_file" in
+      */do/SKILL.md)        continue ;;  # orchestrates; tool refs are descriptive
+      */talk/SKILL.md)      continue ;;
+      */apm-sources.instructions.md) continue ;;  # documents the rule
+      */opencode-mcp-server*)    continue ;;  # documents the seam
+    esac
+    # Find every `mcp__vcs__<tool>` reference; check the tool name is in the allowlist.
+    # `|| true` guards against `set -euo pipefail` exiting when grep finds nothing
+    # (which it doesn't for files like code-police/SKILL.md that never reference MCP tools).
+    referenced_tools="$(grep -oE 'mcp__vcs__(repo|forge)_[a-z_]+' "$skill_file" 2>/dev/null | sed 's|^mcp__vcs__||' | sort -u || true)"
+    [ -z "$referenced_tools" ] && continue
+    for tool in $referenced_tools; do
+      if ! printf '%s\n' "$allowlist_tools" | grep -qxF "$tool"; then
+        echo "::error file=$skill_file::MCP tool \`mcp__vcs__$tool\` referenced but not in opencode.json --allow-tools. Drift between call sites and allowlist is a safety violation — add '$tool' to the --allow-tools list, or remove the prose reference." >&2
+        violations=$((violations + 1))
+      fi
+    done
+  done
+fi
+
 if [ "$violations" -gt 0 ]; then
-  echo "Found $violations raw VCS command pattern(s) in skill files." >&2
-  echo "Replace with \`.../skills/do/scripts/vcs-op <semantic-op>\` calls." >&2
+  echo "Found $violations raw VCS/forge command pattern(s) in skill files." >&2
+  echo "Replace with \`.../skills/do/scripts/vcs-op <semantic-op>\` or \`mcp__vcs__forge_*\` calls." >&2
   exit 1
 fi
 

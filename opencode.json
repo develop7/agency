@@ -9,7 +9,7 @@
         "github:develop7/vcs-toolkit-rs/staging-good_stuff#vcs-mcp",
         "--",
         "--allow-tools",
-        "repo_fetch,repo_commit,repo_push,repo_create_worktree,forge_pr_create,forge_pr_edit,forge_pr_comment,forge_pr_merge"
+        "repo_info,repo_status,repo_fetch,repo_commit,repo_push,repo_create_worktree,forge_info,forge_pr_view,forge_pr_create,forge_pr_edit,forge_pr_comment,forge_pr_merge"
       ],
       "cwd": ".",
       "enabled": true

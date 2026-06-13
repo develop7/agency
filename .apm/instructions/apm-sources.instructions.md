@@ -1,5 +1,5 @@
 ---
-description: Pointers to where the project's VCS/forge and agent-config seams live. Two rules: (1) edit .apm/ sources, not generated dirs; (2) edit opencode.json directly — it's hand-managed, not generated.
+description: "Pointers to where the project's VCS/forge and agent-config seams live. Two rules: (1) edit .apm/ sources, not generated dirs; (2) edit opencode.json directly — it's hand-managed, not generated."
 applyTo: ".claude/**,.opencode/**,opencode.json"
 ---
 
