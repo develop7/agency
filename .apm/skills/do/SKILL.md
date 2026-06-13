@@ -572,11 +572,10 @@ If the call errors with "not found" (the toolkit surfaces this as
      body: "## [Hickey/Lowy](https://kolu.dev/blog/hickey-lowy/) Analysis\n\n<markdown>"
    ```
 
-   (The MCP tool's body parameter is a JSON string; the old single-quoted heredoc
-   pattern that the bash `gh pr comment --body "$(cat <<'EOF' ... EOF)"` form
-   required is no longer necessary — the body is a JSON string, and shell
-   substitution doesn't apply. The toolkit's `guard_argv_field` rejects
-   `--`-prefixed bodies.)
+   (The MCP tool's body parameter is a JSON string — the old single-quoted heredoc
+   discipline that the bash form required
+   is no longer necessary. The body is a JSON string, and shell substitution doesn't
+   apply. The toolkit's `guard_argv_field` rejects `--`-prefixed bodies.)
 
    **Format the comment with a leading findings ledger.** Compose a single table from both sub-agents' Actions
    sections — one row per finding — so a reviewer can see disposition at a glance without parsing paragraphs. Put each
@@ -712,8 +711,7 @@ mcp__vcs__forge_pr_comment
 ```
 
 (The MCP tool's body parameter is a JSON string, not a shell string — the old
-single-quoted heredoc discipline that the bash `gh pr comment --body
-"$(cat <<'EOF' ... EOF)"` form required is no longer necessary.)
+single-quoted heredoc discipline that the bash form required is no longer necessary.)
 
  ```sh
  (The MCP tool's body parameter is a JSON string, not a shell string.)

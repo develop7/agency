@@ -108,30 +108,27 @@ Adjust the command as needed — `nix build` for non-runnable outputs, add `#<ou
 relevant one. Omit this section entirely if the change isn't meaningfully testable via `nix run/build` (e.g., CI-only
 changes, documentation, non-Nix repos, or non-GitHub forges where flake refs would be awkward).
 
-## Passing the body to `gh` safely
+## Passing the body to the forge toolkit safely
 
-**MANDATORY**: Always pass `--body` to `gh pr create` / `gh pr edit` / `gh pr comment` via a **single-quoted heredoc**
-so backticks, `$`, and `!` survive unescaped. Double-quoted `--body "..."` triggers shell command substitution on
-backticks, and escaping them with `\`` produces literal backslashes in the rendered PR (breaking code fences —
-see [juspay/kolu#402](https://github.com/juspay/kolu/pull/402)).
+The forge toolkit (vcs-mcp) takes the body as a **JSON string parameter** to `mcp__vcs__forge_pr_create` /
+`mcp__vcs__forge_pr_edit` / `mcp__vcs__forge_pr_comment`. Backticks, `$`, and `!` survive unescaped in a JSON string
+literal — the shell substitution that broke the old `gh --body "..."` form (`--body "..."` triggers shell command
+substitution on backticks; escaping with `\`` produced literal backslashes in the rendered PR — see
+[juspay/kolu#402](https://github.com/juspay/kolu/pull/402)) no longer applies. The toolkit's `guard_argv_field`
+rejects `--`-prefixed bodies as a second line of defence behind the wrapper's `reject_flag_like`.
 
-```sh
-gh pr create --draft --title "..." --base "<defaultBranch>" --head "<headRevision>"  --body "$(cat <<'EOF'
-...body with ```fenced blocks``` intact...
-EOF
-)"
-```
-
-The `'EOF'` (quoted delimiter) is load-bearing — it disables interpolation inside the heredoc. Never write backticks in
-the body as `\``.
+**No single-quoted heredoc discipline is needed.** The body is the JSON string value of the tool parameter; the
+agent constructs the JSON literal in the agent's tool-call language (not in a shell), and the JSON value
+encodes the markdown as-is. There is no `\`` escaping, no `<<'EOF'` quoting, no `--` to add to escape a leading
+dash in a heading. Write the body markdown directly.
 
 ## Updating existing PRs
 
 When the user pushes further changes to an already-PR'd branch:
 
 1. Check if the PR title/description still accurately reflects the full scope
-2. If new commits meaningfully change what the PR does, update the title and/or body via the forge's edit command (
-   `gh pr edit` on GitHub)
+2. If new commits meaningfully change what the PR does, update the title and/or body via
+   `mcp__vcs__forge_pr_edit` (with `title: "<new title>"` and/or `body: "<new body>"`; at least one must be set)
 3. Don't rewrite from scratch — amend the existing description to cover new ground
 4. Add a brief note about what changed if the scope expanded significantly
 
