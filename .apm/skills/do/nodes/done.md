@@ -55,7 +55,7 @@ Be specific to this run's data, not generic advice.
 
 #### PR comment & wrap-up
 
-**If `--no-vcs`**: Print the timing table and optimization suggestions to the terminal only. List files modified in the working tree (`bash scripts/vcs-op dirty`). Remind the user that changes are uncommitted.
+**If `--no-vcs`**: Print the timing table and optimization suggestions to the terminal only. List files modified in the working tree via `mcp__vcs__repo_status` (the tool returns `Vec<FileChange>` — non-empty means dirty). Remind the user that changes are uncommitted.
 
 **If `!(forgeCapabilities.prCreate && forgeCapabilities.prComment)` (forge can't open a PR or post a comment)**: Report the branch name (and remote URL via `bash scripts/vcs-op remote-url`). Print timing table and suggestions to the terminal only. The skip-on-non-GitHub-forge rule (`"non-<forge> forge: <forge>"` reason) was enforced by the `create-pr` skip predicate (`!state.forgeCapabilities.prCreate`), so the PR was never opened.
 

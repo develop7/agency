@@ -75,8 +75,9 @@ finding.
 
 1. Apply the fix narrowly — only the lines that address this specific finding.
 2. Run the project's format command on the changed files, if configured.
-3. `bash .../skills/do/scripts/vcs-op fix-commit "refactor(hickey): <short finding label>"` (or `refactor(lowy): …`). Body
-   restates the finding in one line.
+3. `mcp__vcs__repo_commit` with `paths: ["."]` and message `refactor(hickey): <short finding label>` (or
+   `refactor(lowy): …` for lowy findings). The toolkit handles git/jj uniformly; the body of the
+   message should restate the finding in one line. Then `mcp__vcs__repo_push` with the feature branch name.
 
 **Under `--no-vcs`**: Skip commit/push. Apply fixes to working tree.
 
@@ -104,7 +105,8 @@ if cross_validate and both reviewers produced findings:
 for each finding with disposition "Fix in this PR":
   apply the fix narrowly
   run fmt on changed files
-  bash .../skills/do/scripts/vcs-op fix-commit "refactor(hickey|lowy): <short label>"
+  mcp__vcs__repo_commit paths:["."] message:"refactor(hickey|lowy): <short label>"
+  mcp__vcs__repo_push branch:"<feature branch>"
   (under --no-vcs: skip commit/push, apply to working tree only)
 
 return { commits, findings_ledger }

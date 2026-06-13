@@ -37,10 +37,12 @@ For each violation reported by `/code-police` (across all three passes), in turn
 
 1. Apply the fix for that one violation — scope the edit tightly.
 2. Run the project's format command on changed files, if configured.
-3. `bash .../skills/do/scripts/vcs-op fix-commit "<prefix>: <short description>"` with the conventional prefix:
-   - Rules pass: `fix(police): <rule-id> — <short description>`
-   - Fact-check pass: `fix(police): fact-check — <short description>`
-   - Elegance pass: `refactor(police): elegance — <short description>`
+3. `mcp__vcs__repo_commit` with `paths: ["."]` and message `<prefix>: <short description>`:
+    - Rules pass: `fix(police): <rule-id> — <short description>`
+    - Fact-check pass: `fix(police): fact-check — <short description>`
+    - Elegance pass: `refactor(police): elegance — <short description>`
+
+   Then `mcp__vcs__repo_push` with the feature branch name.
 
 **Under `--no-vcs`**: Skip commit/push. Apply fixes to working tree.
 
@@ -67,7 +69,8 @@ loop:
   for each violation reported:
     apply fix for that one violation
     run fmt on changed files
-    bash .../skills/do/scripts/vcs-op fix-commit with conventional prefix (fix/refactor(police): ...)
+    mcp__vcs__repo_commit paths:["."] message:"<prefix>: <description>"
+    mcp__vcs__repo_push branch:"<feature branch>"
 
   continue  # re-invoke /code-police
 ```

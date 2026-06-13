@@ -58,7 +58,7 @@ bash .../skills/do/scripts/steps/sync <noVcs> --forge-info '<the JSON from step 
 
 The script:
 
-- Detects the VCS (`.jj/` → `jj`, `.git/` → `git`, else `unknown`) via `bash scripts/vcs-op detect`.
+- Detects the VCS (`.jj/` → `jj`, `.git/` → `git`, else `unknown`) via `mcp__vcs__repo_info` (the tool returns `{backend, root, cwd, forge}` — read `backend` for git/jj).
 - Fetches the default remote (`git fetch origin` / `jj git fetch`).
 - Pins `origin/HEAD` (git only).
 - If `--no-vcs` is **not** set and the branch is behind origin (ahead-count 0), fast-forwards

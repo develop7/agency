@@ -290,20 +290,25 @@ Create a NEW commit (never amend) with a conventional commit message for the pri
 VCS-agnostic dispatcher:
 
 ```
-bash .../skills/do/scripts/vcs-op commit "<message>"
-bash .../skills/do/scripts/vcs-op push <branch>
+mcp__vcs__repo_commit
+  paths: ["."]
+  message: "<message>"
+mcp__vcs__repo_push
+  branch: "<feature branch>"
 ```
 
-Git: stages all changes with `git add -A`, commits with `git commit -m "..."`, pushes with
-`bash scripts/vcs-op push <branch>`.
+The toolkit handles git and jj uniformly. Git: `repo_commit` is
+`git commit --only -- <paths>` (commits the working-tree content of those
+paths directly, no staging area involved), then `repo_push` is `git push -u
+origin <branch>` for the first push.
 Jujutsu: auto-snapshots the working copy, describes with `jj describe -m "..."`, then `jj new` to start a fresh
 change. Before the `jj new`, the bookmark is on `@` (the change being committed); after, `@` is the new empty change
 and the bookmark is now on `@-` (the just-described commit). If the working copy was started with `jj new` before
 calling `vcs-op commit` (the followup case — see **How to walk the graph**), the bookmark is somewhere up the
 parent chain (`@--`, `@---`, ...). `vcs-op commit` walks the chain to find the bookmark and moves it to `@-` so the
-subsequent `bash scripts/vcs-op push <bookmark>` lands on the new commit. (Note: do **not** start the new change
+subsequent `mcp__vcs__repo_push` lands on the new commit. (Note: do **not** start the new change
 with `jj new --no-edit` — see the Jujutsu gotcha above.) Pushes the bookmark with
-`jj git push --bookmark <name>`. `bash scripts/vcs-op log-head` returns the just-described change (`@-` for jj,
+`jj git push -b <name>` via `mcp__vcs__repo_push`. `bash scripts/vcs-op log-head` returns the just-described change (`@-` for jj,
 equivalent to `git log -1 --oneline` showing HEAD), so the verify below works for both VCSes.
 
 This is the **primary feature commit**. Downstream **hickey+lowy** and **police** steps produce their own follow-up
@@ -435,8 +440,9 @@ turn:
 
 1. Apply the fix narrowly — only the lines that address this specific finding.
 2. Run the project's format command (from **fmt** instructions) on the changed files, if one is configured.
-3. `.../skills/do/scripts/vcs-op fix-commit "refactor(hickey): <short finding label>"` (or `refactor(lowy): …` depending
-   on the lens). The body of the message should restate the finding in one line so the commit is self-explanatory in the
+3. `mcp__vcs__repo_commit` with `paths: ["."]` and message
+   `refactor(hickey): <short finding label>` (or `refactor(lowy): …` for the lowy lens). The body
+   of the message should restate the finding in one line so the commit is self-explanatory in the
    log.
 
 **Under `--no-vcs`**: Skip the commit/push steps entirely. Apply fixes to the working tree and move on — the user will
@@ -472,8 +478,8 @@ For each violation reported by `/code-police` (across all three passes), in turn
 
 1. Apply the fix for that one violation — scope the edit tightly.
 2. Run the project's format command on changed files, if configured.
-3. `bash .../skills/do/scripts/vcs-op fix-commit "<prefix>: <short description>"` with the conventional prefix
-   identifying the pass and rule:
+3. `mcp__vcs__repo_commit` with `paths: ["."]` and message
+   `<prefix>: <short description>` (the conventional prefix identifying the pass and rule):
     - Rules pass: `fix(police): <rule-id> — <short description>` (e.g.
       `fix(police): no-dead-code — remove commented-out fallback`)
     - Fact-check pass: `fix(police): fact-check — <short description>` (e.g.
@@ -729,8 +735,8 @@ Be specific to this run's data, not generic advice.
 #### PR comment & wrap-up
 
 **If `--no-vcs`**: There is no branch or PR to report against. Print the timing table and optimization suggestions to
-the terminal only. List the files modified in the working tree via `.../skills/do/scripts/vcs-op dirty` and the
-VCS-appropriate status output so the user can see what the agent touched. Remind the user that changes are uncommitted —
+the terminal only. List the files modified in the working tree via `mcp__vcs__repo_status` (the tool returns
+`Vec<FileChange>` — non-empty means dirty; the VCS-appropriate output). Remind the user that changes are uncommitted —
 the commit/push/PR steps are theirs to run.
 
 **If `!(state.forgeCapabilities.prCreate && state.forgeCapabilities.prComment)` (forge can't open a PR or post a comment)**:
