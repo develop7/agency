@@ -19,3 +19,31 @@ type: hybrid
 # opencode-specific seam.
 targets:
   - opencode
+
+# MCP server declaration (self-defined stdio; vcs-toolkit-rs fork)
+# This is the *only* MCP server the workflow needs.
+# APM materialises this into the host's per-target MCP config
+# (opencode.json for opencode, .mcp.json for claude, etc.).
+# See https://microsoft.github.io/apm/producer/author-primitives/mcp-as-primitive/
+dependencies:
+  mcp:
+    - name: vcs
+      registry: false
+      transport: stdio
+      command: nix
+      args:
+        - run
+        - github:develop7/vcs-toolkit-rs/staging-good_stuff#vcs-mcp
+        - "--"
+        - "--allow-tools"
+        - "repo_fetch,repo_commit,repo_push,repo_create_worktree,forge_pr_create,forge_pr_edit,forge_pr_comment,forge_pr_merge"
+      tools:
+        - repo_fetch
+        - repo_commit
+        - repo_push
+        - repo_create_worktree
+        - forge_pr_create
+        - forge_pr_edit
+        - forge_pr_comment
+        - forge_pr_merge
+
