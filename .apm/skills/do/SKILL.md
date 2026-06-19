@@ -1,7 +1,7 @@
 ---
 name: do
 description: Do a task end-to-end — implement, PR, CI loop, ship. ONLY invoke when the user explicitly types `/do` or `$do`; never auto-select from a natural-language request, even one that sounds like an end-to-end task.
-argument-hint: "<issue-url | prompt> [--review] [--no-vcs] [--minimal] [--from <step-id>]"
+argument-hint: "<issue-url | prompt> [--review] [--no-vcs] [--minimal] [--from <step-id>] [--base <branch> | --stack]"
 ---
 
 # Do Workflow
@@ -32,8 +32,10 @@ to start a new change (e.g., to add followup work on top of an existing WIP), us
 one — almost never what the workflow wants. Using `--no-edit` by accident means the subsequent edits
 land in the existing change, not the new one; the workflow then has no place to put the new work.
 
-1. Parse arguments: `[--review] [--no-vcs] [--minimal] [--from <step-id>] <task>`
-2. Call `bash scripts/do-driver init <flags> <task>` to initialize state.
+1. Parse arguments: `[--review] [--no-vcs] [--minimal] [--from <step-id>] [--base <branch> | --stack] <task>`.
+   `--review`/`--no-vcs`/`--minimal`/`--from` go to `do-driver init`; `--base`/`--stack` go to `sync` (they select the
+   stacked-PR base, which sync resolves and persists — do-driver init rejects them).
+2. Call `bash scripts/do-driver init <review/no-vcs/minimal/from flags> <task>` to initialize state.
 3. Seed the task checklist using Nickel:
    ```bash
    bash scripts/nickel-cli cli_seed "<from>"
@@ -64,6 +66,18 @@ Tracking: [srid/agency#10](https://github.com/srid/agency/issues/10).
 - `--minimal`: Skip **docs**, `hickey-lowy`, **police**, and **evidence** (omitted from todo list entirely).
 - `--from <step-id>`: Start from a specific node. Entry points: `default`→sync, `followup`→implement, `post-implement`
   →fmt, `polish`→hickey-lowy, `ci-only`→ci.
+- `--base <branch>`: Branch from `<branch>` and target the PR at it — **stacked PRs**. The parent must be pushed (git
+  requires `origin/<branch>`; jj requires the bookmark to exist). Mutually exclusive with `--stack`; incompatible with
+  `--no-vcs`.
+- `--stack`: Auto-detect the base as the current branch when it is a feature branch (≠ default), else the default
+  branch. Invoked while on a feature bookmark, this stacks the new PR on top of it. Mutually exclusive with `--base`;
+  incompatible with `--no-vcs`.
+
+**Base vs default branch.** The workflow branches from, diffs against, and targets the PR at a single resolved `base`.
+With neither `--base` nor `--stack`, `base` is the default branch (origin HEAD) — today's behavior. `--base`/`--stack`
+make `base` a feature branch so a PR can stack onto its parent. Every review/diff op reads `base` from state
+(`vcs-op base`), so a stacked PR's review covers just that PR's changes, not the cumulative stack. Deep stacks (>2) need
+a fresh `/do` per level (each run re-resolves its own `base`); `/do` does not auto-restack when a parent merges.
 
 ## Results Tracking
 
@@ -86,6 +100,9 @@ The `bash scripts/do-results` script tracks:
 - `noVcs` — `true` or `false`. Reflects the `--no-vcs` flag.
 - `minimal` — `true` or `false`. Reflects the `--minimal` flag.
 - `review` — `true` or `false`. Reflects the `--review` flag.
+- `base` — resolved branch to branch from, diff against, and target the PR at. Populated by `bash scripts/steps/sync`
+  (from `--base <branch>`, `--stack`, or the default branch). Read by `vcs-op` for every diff/log/branch op; this is the
+  field that makes stacked PRs work.
 
 **Commands** (invoke with the full path, e.g. `.../skills/do/scripts/do-results ...`):
 
@@ -132,10 +149,11 @@ Rules:
 
 ### sync
 
-Run the `bash scripts/steps/sync` script in this skill's directory, passing `true` or `false` for `--no-vcs`:
+Run the `bash scripts/steps/sync` script in this skill's directory, passing `true` or `false` for `--no-vcs` plus any
+base-selection flag:
 
 ```
-bash .../skills/do/scripts/steps/sync <noVcs>
+bash .../skills/do/scripts/steps/sync <noVcs> [--base <branch> | --stack]
 ```
 
 The script:
@@ -155,13 +173,15 @@ The script:
   `github`, `bitbucket.` (covers `bitbucket.org` and self-hosted servers like `bitbucket.juspay.net`) → `bitbucket`,
   otherwise `unknown`.
 - Calls `bash scripts/do-results init` then `bash scripts/do-results step sync passed ...`.
-- Prints `vcs=<value>`, `forge=<value>`, `branch=<value>`, `defaultBranch=<value>` on stdout for downstream steps.
+- Resolves `base` (`--base <branch>` → that branch; `--stack` → the current feature branch, else default; otherwise the
+  default branch) and stashes it via `do-results set base <value>`.
+- Prints `vcs=<value>`, `forge=<value>`, `branch=<value>`, `defaultBranch=<value>`, `base=<value>` on stdout for downstream steps.
 
 **Only `github` has an active code path today.** Both `bitbucket` and `unknown` cause forge-dependent steps (PR
 creation, PR comments, PR edits, CI status) to skip gracefully. Bitbucket support is planned —
 see [srid/agency#10](https://github.com/srid/agency/issues/10).
 
-**Verify**: Script exited 0 and printed `vcs=`, `forge=`, `branch=`, `defaultBranch=` lines on stdout. (Sync silences
+**Verify**: Script exited 0 and printed `vcs=`, `forge=`, `branch=`, `defaultBranch=`, `base=` lines on stdout. (Sync silences
 `do-results`' own confirmation echoes so the protocol stays clean.)
  
 ---
@@ -201,14 +221,16 @@ instructions live in the plan-approval node, not in this step.
 **If `--no-vcs`**: Skip this step entirely with status `skipped` and reason `"--no-vcs"`. Stay on the current branch —
 do not create, commit, or push anything. Move to **implement**.
 
-Read `vcs` and `defaultBranch` from `.do-results.json`. Then:
+Read `vcs` and `base` from `.do-results.json`. Then:
 
 ```
-bash .../skills/do/scripts/vcs-op branch <descriptive-name> <defaultBranch>
+bash .../skills/do/scripts/vcs-op branch <descriptive-name>
 ```
 
-The script handles the VCS-specific details: git creates `git branch <name> origin/<default>`; jj creates
-`jj new <default>` followed by `jj bookmark create <name> -r @`.
+No base argument — `vcs-op` reads the resolved `base` from state. The script handles the VCS-specific details: git creates
+`git branch <name> origin/<base>` (and hard-errors if `origin/<base>` is missing — push the parent before stacking); jj
+creates `jj new <base>` followed by `jj bookmark create <name> -r @`. `base` is the resolved branch-from target
+(default branch, or a feature branch under `--base`/`--stack`), so this is where stacked PRs get their parent.
 
 That's it — just the local branch. No commit, no push, no PR. The branch is pushed later in **commit**, and the PR is
 created in **create-pr** after all changes are done.
@@ -349,11 +371,11 @@ Each `Agent` prompt must be self-contained (sub-agents do not inherit this conve
 
 - The full task prompt plus anything relevant that **research** uncovered (file paths, intended approach, key
   constraints)
-- The scope to analyze: the actual diff, obtained via `bash .../skills/do/scripts/vcs-op diff-range <defaultBranch>` —
+- The scope to analyze: the actual diff, obtained via `bash .../skills/do/scripts/vcs-op diff-range` —
   this is the same scope regardless of entry point (default or followup), since the branch at this point holds the
   primary feature commit (plus any cumulative followup commits) and no further work is pending
 - **Duplication-audit hint**, when the diff adds new files — check with
-  `.../skills/do/scripts/vcs-op new-files <defaultBranch>` and only include the hint if the output is non-empty. The
+  `.../skills/do/scripts/vcs-op new-files` and only include the hint if the output is non-empty. The
   hint tells the reviewer to start with the codebase survey their skill describes (`hickey` Layer 3, `lowy` §1 "Check
   for prior encapsulation"): find the canonical in-repo pattern for the same *kind* of operation (picker, dialog,
   popover, list view, list-edit primitive, scheduler, error type, config loader, fetcher, …) and flag it as the headline
@@ -414,7 +436,7 @@ Skip this phase if **both** reviewers returned zero findings — there is nothin
 Otherwise, for each reviewer that produced findings, spawn a second invocation of *that same skill* (
 `subagent_type: "hickey"` or `subagent_type: "lowy"`) with a self-contained prompt containing:
 
-- The actual diff (`bash .../skills/do/scripts/vcs-op diff-range <defaultBranch>`).
+- The actual diff (`bash .../skills/do/scripts/vcs-op diff-range`).
 - The other reviewer's full findings output (paste it verbatim — the cross-validator must see the recommendations being
   audited, not a summary).
 - The question, phrased neutrally: _"Apply your lens to the diff **and** to the other reviewer's recommendations. Does
@@ -449,7 +471,7 @@ applied to working tree, not committed."
 main-model fallback. Cross-validation ran (or was correctly skipped because both reviewers returned zero findings).
 Every finding — first-pass or cross-validation — has an action recorded, either **Fix in this PR** or **No-op** (no
 defers; if the sub-agent emitted one, the audit step above flipped it to Fix in this PR). Every "Fix in this PR" finding
-has a corresponding commit on the feature branch (check via `bash scripts/vcs-op log-range <defaultBranch>`), except under
+has a corresponding commit on the feature branch (check via `bash scripts/vcs-op log-range`), except under
 `--no-vcs`. No unactioned findings; no deferred findings.
  
 ---
@@ -458,7 +480,7 @@ has a corresponding commit on the feature branch (check via `bash scripts/vcs-op
 
 **If `--minimal`**: Skip with status `skipped` and reason `"--minimal"`. Move to **test**. Do not invoke `/code-police`.
 
-Use `bash .../skills/do/scripts/vcs-op diff-names <defaultBranch>` to check if the PR contains code changes. If all
+Use `bash .../skills/do/scripts/vcs-op diff-names` to check if the PR contains code changes. If all
 changed files are documentation-only (e.g., `.md`, `.txt`, `README`, docs/) — skip this step with a note.
 
 Otherwise, invoke the `/code-police` skill via the Skill tool. It runs three passes: rule checklist, fact-check, and
@@ -491,7 +513,7 @@ commits too.
 combined delta.
 
 **Verify**: All 3 passes clean ("All clear"). Under `--no-vcs`, the tree reflects the fixes; otherwise
-`bash scripts/vcs-op log-range <defaultBranch>` shows one commit per violation addressed.
+`bash scripts/vcs-op log-range` shows one commit per violation addressed.
 **If violations found** (max 3 attempts): Fix the violations (one commit per fix, as above) and re-invoke
 `/code-police`.
  
@@ -502,7 +524,7 @@ combined delta.
 Read `.agency/do.md` and look for a `## Test command` section. Run only the tests relevant to the code paths changed in
 this PR.
 
-Use `bash .../skills/do/scripts/vcs-op diff-names <defaultBranch>` to identify changed files and determine which tests
+Use `bash .../skills/do/scripts/vcs-op diff-names` to identify changed files and determine which tests
 are relevant.
 
 If changes are purely internal with no user-facing impact, unit tests may suffice — skip e2e if no relevant scenarios
@@ -533,7 +555,7 @@ Check whether a PR already exists for this branch (`gh pr view`).
 
 **If no PR exists** (first run, normal path):
 
-1. Create a draft PR: `gh pr create --draft`
+1. Create a draft PR: `gh pr create --draft --head <current branch name> --base <base branch name>`
 
    **MANDATORY**: Load the `forge-pr` skill (via Skill tool) BEFORE writing the PR title/body.
 
@@ -651,7 +673,7 @@ The sub-agent prompt should include:
 
 - The literal section content from `.agency/do.md`.
 - Standard PR context: PR URL, branch name, base branch, current commit SHA, and
-  `.../skills/do/scripts/vcs-op diff-names <defaultBranch>` so the sub-agent knows which routes/files to exercise.
+  `.../skills/do/scripts/vcs-op diff-names` so the sub-agent knows which routes/files to exercise.
 - An explicit instruction that the sub-agent's job is to return a single block of markdown (image links embedded, table
   data inline, etc.) suitable for posting under a `## Evidence` heading. The sub-agent should not post the comment
   itself — only return the markdown.

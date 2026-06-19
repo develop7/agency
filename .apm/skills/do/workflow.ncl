@@ -70,6 +70,10 @@
         steps | Array { name | String, status | std.enum.TagOrString, .. },
         forge | std.enum.TagOrString,
         noVcs | Bool,
+        # `base` is the resolved branch to branch from, diff against, and
+        # target the PR at (enables stacked PRs via --base / --stack).
+        # Written by sync; read by vcs-op. Empty until sync runs.
+        base | String | default = "",
         minimal | Bool,
         review | Bool | default = false,
         has_evidence | Bool | default = false,
@@ -121,7 +125,7 @@
       pattern = 'one-shot,
       next = "implement",
       skip_when | not_exported = fun state => state.noVcs,
-      requires = ["sync.defaultBranch"],
+      requires = ["sync.base"],
       instructions = "nodes/branch.md",
     },
 

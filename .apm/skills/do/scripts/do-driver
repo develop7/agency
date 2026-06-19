@@ -5,6 +5,7 @@
 #
 # Usage:
 #   do-driver init [--review] [--no-vcs] [--minimal] [--from=<step>] <task>
+#     (--base / --stack go to `scripts/steps/sync`, not here)
 #   do-driver start <step>
 #   do-driver end <status> <verification> [reason]
 #     (the step name comes from the active pendingStep, set by `start`;
@@ -43,6 +44,17 @@ case "$cmd" in
         --from=*)
           from="${1#*=}"
           shift
+          ;;
+        # --base / --stack are NOT handled here: they select the stacked-PR
+        # base, which sync resolves and persists. do-driver only owns flags
+        # that feed the Nickel skip predicates (review/noVcs/minimal/from).
+        # Routing --base/--stack here too would echo them (looking authoritative)
+        # while sync re-derived base from its own args — a misroute would then
+        # silently target master. Reject loudly so the agent routes them to sync.
+        --base|--stack)
+          echo "do-driver: $1 is a sync flag, not an init flag." >&2
+          echo "         pass it to 'bash scripts/steps/sync', not to 'do-driver init'." >&2
+          exit 2
           ;;
         --*)
           echo "do-driver: unknown flag: $1" >&2

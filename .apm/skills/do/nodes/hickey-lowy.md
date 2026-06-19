@@ -9,7 +9,7 @@ description: Parallel structural review with hickey and lowy sub-agents.
 
 - `--minimal` flag
 - `--no-vcs` flag
-- Diff `bash scripts/vcs-op diff-range <defaultBranch>`
+- Diff `bash scripts/vcs-op diff-range`
 - Full task prompt + research context
 
 ## Ensures
@@ -47,8 +47,8 @@ in that response.
 Each prompt must be self-contained. Brief each one with:
 
 - The full task prompt plus anything relevant that **research** uncovered
-- Scope: the actual diff, `bash scripts/vcs-op diff-range <defaultBranch>`
-- **Duplication-audit hint**, when the diff adds new files — check with `bash scripts/vcs-op new-files <defaultBranch>` and
+- Scope: the actual diff, `bash scripts/vcs-op diff-range`
+- **Duplication-audit hint**, when the diff adds new files — check with `bash scripts/vcs-op new-files` and
   only include the hint if the output is non-empty
 
 **Do not seed structural questions.** The implementer's prompt must NOT include pre-formed questions like _"Is module X

@@ -22,7 +22,7 @@ Check whether a PR already exists for this branch (`gh pr view`).
 
 **If no PR exists** (first run, normal path):
 
-1. Create a draft PR: `gh pr create --draft --head <current_branch_name> --base <default_branch_name>`
+1. Create a draft PR: `gh pr create --draft --head <current_branch_name> --base <base branch name>`
 
    **MANDATORY**: Load the `forge-pr` skill (via Skill tool) BEFORE writing the PR title/body.
 

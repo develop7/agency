@@ -1,25 +1,80 @@
 # /do workflow's sync step — extracted to a script to collapse several Bash
-# round-trips into one. Handles fetch, fast-forward, forge detection, dirty-
-# tree hint, and initial results bookkeeping. VCS-agnostic: delegates to
-# scripts/vcs-op.
+# round-trips into one. Handles fetch, fast-forward, forge detection (from the
+# remote URL), dirty-tree hint, base resolution, and initial results
+# bookkeeping. VCS-agnostic: delegates to scripts/vcs-op.
+#
+# Also resolves the run's `base` — the branch to branch from, diff against,
+# and target the PR at (enables stacked PRs). Resolution order:
+#   --base <branch>  → base = <branch>          (explicit parent)
+#   --stack          → base = current feature branch, else the default branch
+#                      (auto "closest branch")
+#   neither          → base = default branch     (origin HEAD; today's behavior)
+# The resolved `base` is written to .do-results.json; downstream ops read it
+# via vcs-op's get_base_branch (no per-call arg threading).
 #
 # Usage:
-#   sync <noVcs>
-#     <noVcs>  "true" or "false" — whether --no-vcs was passed
+#   sync <noVcs> [--base <branch> | --stack]
+#     <noVcs>      "true" or "false" — whether --no-vcs was passed
+#     --base       explicit base branch (mutually exclusive with --stack;
+#                  incompatible with --no-vcs)
+#     --stack      auto-detect: stack on the current feature branch
 #
 # Stdout (for the agent to parse):
 #   vcs=<jj|git|unknown>
 #   forge=<github|bitbucket|unknown>
 #   branch=<current branch name>
 #   defaultBranch=<origin HEAD ref name>
+#   base=<resolved base branch name>
 
 set -euo pipefail
 
-noVcs="${1:?Usage: sync <noVcs>  (true|false)}"
+noVcs=""
+base_request=""
+stack="false"
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --base)
+      base_request="${2:?--base requires a branch argument}"
+      shift 2
+      ;;
+    --stack)
+      stack="true"
+      shift
+      ;;
+    --*)
+      echo "sync: unknown flag: $1" >&2
+      echo "Usage: sync <noVcs> [--base <branch> | --stack]" >&2
+      exit 2
+      ;;
+    *)
+      # A bare positional is the noVcs argument; validate below. Accept it
+      # here even if invalid (e.g. "maybe") so the post-loop check emits the
+      # specific "noVcs must be 'true' or 'false'" message rather than
+      # "unknown argument".
+      noVcs="$1"
+      shift
+      ;;
+  esac
+done
+
+if [ -z "$noVcs" ]; then
+  echo "sync: noVcs is required (true or false)" >&2
+  echo "Usage: sync <noVcs> [--base <branch> | --stack]" >&2
+  exit 2
+fi
 case "$noVcs" in
   true|false) ;;
   *) echo "sync: noVcs must be 'true' or 'false', got '$noVcs'" >&2; exit 2 ;;
 esac
+if [ -n "$base_request" ] && [ "$stack" = "true" ]; then
+  echo "sync: --base and --stack are mutually exclusive" >&2
+  exit 2
+fi
+if [ "$noVcs" = "true" ] && { [ -n "$base_request" ] || [ "$stack" = "true" ]; }; then
+  echo "sync: --base/--stack are incompatible with --no-vcs" >&2
+  echo "       --no-vcs skips branch/commit/PR; the base has no effect." >&2
+  exit 2
+fi
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DO_RESULTS="$SCRIPT_DIR/../do-results"
@@ -72,22 +127,39 @@ case "$origin_url" in
 esac
 
 # Initialize results, stash /do-specific top-level fields (vcs, forge, noVcs)
-# via the generic `set` command, then record the sync step. Suppress do-results'
-# stdout confirmations — sync emits its own vcs/forge/branch/defaultBranch
-# protocol below and shouldn't pollute it with do-results' echo lines.
+# via the generic `set` command. Suppress do-results' stdout confirmations —
+# sync emits its own protocol below and shouldn't pollute it with do-results'
+# echo lines.
 [ -f ".do-results.json" ] || bash "$DO_RESULTS" init >/dev/null
 bash "$DO_RESULTS" set vcs "$vcs" >/dev/null
 bash "$DO_RESULTS" set forge "$forge" >/dev/null
 bash "$DO_RESULTS" set noVcs "$noVcs" >/dev/null
-bash "$DO_RESULTS" step sync passed \
-  "fetch ok; vcs=$vcs; forge=$forge; noVcs=$noVcs" \
-  "$startedAt" now >/dev/null
 
 # Emit structured facts the agent uses for downstream steps
 branch="$(bash "$VCS_OP" head-revision)"
 default_ref="$(bash "$VCS_OP" default-branch)"
 
+# Resolve the base for this run (see header comment for the policy).
+if [ -n "$base_request" ]; then
+  base="$base_request"
+elif [ "$stack" = "true" ]; then
+  current="$(bash "$VCS_OP" current-branch)"
+  if [ -n "$current" ] && [ "$current" != "$default_ref" ] && [ "$current" != "HEAD" ]; then
+    base="$current"
+  else
+    base="$default_ref"
+  fi
+else
+  base="$default_ref"
+fi
+bash "$DO_RESULTS" set base "$base" >/dev/null
+
+bash "$DO_RESULTS" step sync passed \
+  "fetch ok; vcs=$vcs; forge=$forge; noVcs=$noVcs; base=$base" \
+  "$startedAt" now >/dev/null
+
 echo "vcs=$vcs"
 echo "forge=$forge"
 echo "branch=$branch"
 echo "defaultBranch=$default_ref"
+echo "base=$base"

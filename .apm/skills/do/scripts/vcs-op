@@ -15,7 +15,9 @@
 #   remote-url        → prints origin URL
 #   head-revision     → prints current change/branch identifier
 #   head-commit-sha   → prints current commit SHA (for CI verification)
-#   default-branch    → prints default/base branch name
+#   default-branch    → prints origin HEAD ref name (the base-resolution input)
+#   current-branch    → prints the branch/bookmark the working copy is on
+#   base              → prints the resolved base for this run (from state)
 #   dirty             → exit 0 if working copy has uncommitted changes, 1 if clean
 #   diff-range        → diff between base and current (for review tools)
 #   diff-names        → diff-range, name-only
@@ -23,14 +25,33 @@
 #   new-files         → names of files newly added in current range
 #   log-range         → one-line log between base and current
 #   log-head          → one-line log of current revision
-#   branch <name>     → create a feature branch from default branch
+#   branch <name>     → create a feature branch from the resolved base
 #   commit <msg>      → commit/describe staged changes
 #   push              → push to remote (first push)
 #   fix-commit <msg>  → create a follow-up fix commit and push
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# `.do-results.json` is cwd-relative (repo root) — matches how
+# `scripts/do-results` resolves `FILE=".do-results.json"`. The workflow always
+# invokes vcs-op from the repo root. Hoisting the jq resolution + field read
+# behind one helper so every reader uses the same mechanism: detect_vcs
+# previously resolved the file via $SCRIPT_DIR/../.. (which points at
+# .apm/skills/, NOT the repo root) and was silently dead, always falling
+# through to the filesystem probe; get_base_branch used cwd-relative. One path.
+JQ="jq"
+if ! command -v jq &>/dev/null; then
+  command -v nix &>/dev/null && JQ="nix run nixpkgs#jq --"
+fi
+STATE=".do-results.json"
+
+# Read a top-level field from .do-results.json. Prints empty (not error) if the
+# file or field is absent or jq is unavailable — callers decide whether an empty
+# result is fatal (get_base_branch errors; detect_vcs falls back to filesystem).
+state_get() {
+  [ -f "$STATE" ] || return 0
+  "$JQ" -r ".${1:?field required} // \"\"" "$STATE" 2>/dev/null || true
+}
 
 # Resolve VCS type
 detect_vcs() {
@@ -38,17 +59,11 @@ detect_vcs() {
     echo "$VCS_OVERRIDE"
     return
   fi
-  if [ -f "$SCRIPT_DIR/../../.do-results.json" ] 2>/dev/null; then
-    local v
-    if command -v jq &>/dev/null; then
-      v=$(jq -r '.vcs // ""' "$SCRIPT_DIR/../../.do-results.json" 2>/dev/null)
-    elif command -v nix &>/dev/null; then
-      v=$(nix run nixpkgs#jq -- -r '.vcs // ""' "$SCRIPT_DIR/../../.do-results.json" 2>/dev/null)
-    fi
-    if [ -n "$v" ]; then
-      echo "$v"
-      return
-    fi
+  local v
+  v="$(state_get vcs)"
+  if [ -n "$v" ]; then
+    echo "$v"
+    return
   fi
   # Filesystem fallback
   if [ -d .jj ]; then echo jj; return; fi
@@ -62,10 +77,13 @@ get_default_branch() {
       git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's|^origin/||' || echo master
       ;;
     jj)
-      local remote_bookmarks
-      remote_bookmarks=$(jj bookmark list --remote origin 2>/dev/null || true)
+      # Name-only template (same idiom as the other bookmark-list sites) so the
+      # colon from the default `name: <hash> <desc>` format can't leak —
+      # `master:` broke every downstream revset and git-style ref. Fall back to
+      # `master` when no main/master remote bookmark exists (matches the
+      # pre-base behavior and the bats tests).
       local default
-      default=$(echo "$remote_bookmarks" | grep -m1 -E '^main|^master' | head -1 | awk '{print $1}')
+      default=$(jj bookmark list --remote origin -T 'name ++ "\n"' 2>/dev/null | grep -m1 -E '^main|^master' || true)
       if [ -n "$default" ]; then
         echo "$default"
       else
@@ -74,6 +92,30 @@ get_default_branch() {
       ;;
     *) echo master ;;
   esac
+}
+
+# The resolved base for this /do run: the branch to branch from, diff
+# against, and target the PR at. Written by `scripts/steps/sync` after
+# resolving --base / --stack / default. Distinct from `get_default_branch`
+# (which is the origin-HEAD *input* to that resolution, queried via the
+# `default-branch` op).
+#
+# Reads `base` from `.do-results.json`. No fallback: if `base` is absent
+# the workflow never resolved it (e.g. a `--from` entry that skipped sync
+# on a fresh run with no prior state), and silently degrading to the
+# default branch would flip a stacked run's diffs and PR target to master.
+# Error loudly so the caller surfaces it instead of reviewing the wrong diff.
+get_base_branch() {
+  local base
+  base="$(state_get base)"
+  if [ -z "$base" ]; then
+    echo "vcs-op: base is not set. sync must run first to resolve the base" >&2
+    echo "        (from --base <branch>, --stack, or the default branch)." >&2
+    echo "        If this was a --from re-run, the parent run did not persist base." >&2
+    echo "        (Same error fires if jq is unavailable or .do-results.json is corrupt — check 'command -v jq'.)" >&2
+    exit 1
+  fi
+  echo "$base"
 }
 
 # For jj: after `vcs-op commit` or `vcs-op fix-commit` (both of which
@@ -171,6 +213,26 @@ case "$op" in
   default-branch)
     get_default_branch
     ;;
+  current-branch)
+    # The branch/bookmark the working copy is "on" — used by --stack to pick
+    # the closest feature branch as the base. git: the checked-out branch
+    # ("HEAD" when detached). jj: the bookmark on @, else on @- (the parent
+    # of the working change), else "" (nothing to stack onto).
+    case "$vcs" in
+      git) git rev-parse --abbrev-ref HEAD ;;
+      jj)
+        b="$(jj bookmark list -r @ -T 'name ++ "\n"' 2>/dev/null | head -1)"
+        if [ -z "$b" ]; then
+          b="$(jj bookmark list -r @- -T 'name ++ "\n"' 2>/dev/null | head -1)"
+        fi
+        echo "$b"
+        ;;
+      *) echo "" ;;
+    esac
+    ;;
+  base)
+    get_base_branch
+    ;;
   dirty)
     case "$vcs" in
       git) [ -n "$(git status --porcelain)" ] ;;
@@ -179,59 +241,59 @@ case "$op" in
     esac
     ;;
   diff-range)
-    base="${1:-$(get_default_branch)}"
+    base=$(get_base_branch)
     case "$vcs" in
       git)
         # Three-dot diff: changes since branching from origin/<base>
-        git diff "origin/${base}...HEAD" -- "${@:2}"
+        git diff "origin/${base}...HEAD" -- "$@"
         ;;
       jj)
         # Diff from merge-base to the just-committed change (@-).
         # Using @ here would diff to the new empty change (nothing).
         merge_base=$(jj log -r 'heads(ancestors(@-) & ancestors('"$base"'))' --no-graph -T 'change_id' 2>/dev/null | head -1)
         if [ -n "$merge_base" ]; then
-          jj diff --from "$merge_base" --to @- -- "${@:2}"
+          jj diff --from "$merge_base" --to @- -- "$@"
         else
-          jj diff --from "$base" --to @- -- "${@:2}"
+          jj diff --from "$base" --to @- -- "$@"
         fi
         ;;
       *) echo "vcs-op: no VCS detected" >&2; exit 1 ;;
     esac
     ;;
   diff-names)
-    base="${1:-$(get_default_branch)}"
+    base=$(get_base_branch)
     case "$vcs" in
-      git) git diff "origin/${base}...HEAD" --name-only -- "${@:2}" ;;
+      git) git diff "origin/${base}...HEAD" --name-only -- "$@" ;;
       jj)
         merge_base=$(jj log -r 'heads(ancestors(@-) & ancestors('"$base"'))' --no-graph -T 'change_id' 2>/dev/null | head -1)
         if [ -n "$merge_base" ]; then
-          jj diff --from "$merge_base" --to @- --name-only -- "${@:2}"
+          jj diff --from "$merge_base" --to @- --name-only -- "$@"
         else
-          jj diff --from "$base" --to @- --name-only -- "${@:2}"
+          jj diff --from "$base" --to @- --name-only -- "$@"
         fi
         ;;
       *)   echo "vcs-op: no VCS detected" >&2; exit 1 ;;
     esac
     ;;
   diff-stat)
-    base="${1:-$(get_default_branch)}"
+    base=$(get_base_branch)
     case "$vcs" in
-      git) git diff "origin/${base}...HEAD" --shortstat -- "${@:2}" ;;
+      git) git diff "origin/${base}...HEAD" --shortstat -- "$@" ;;
       jj)
         merge_base=$(jj log -r 'heads(ancestors(@-) & ancestors('"$base"'))' --no-graph -T 'change_id' 2>/dev/null | head -1)
         if [ -n "$merge_base" ]; then
-          jj diff --from "$merge_base" --to @- --summary -- "${@:2}"
+          jj diff --from "$merge_base" --to @- --summary -- "$@"
         else
-          jj diff --from "$base" --to @- --summary -- "${@:2}"
+          jj diff --from "$base" --to @- --summary -- "$@"
         fi
         ;;
       *)   echo "vcs-op: no VCS detected" >&2; exit 1 ;;
     esac
     ;;
   new-files)
-    base="${1:-$(get_default_branch)}"
+    base=$(get_base_branch)
     case "$vcs" in
-      git) git diff --diff-filter=A --name-only "origin/${base}...HEAD" -- "${@:2}" ;;
+      git) git diff --diff-filter=A --name-only "origin/${base}...HEAD" -- "$@" ;;
       jj)
         # List files added in the just-committed change (@-) vs base.
         merge_base=$(jj log -r 'heads(ancestors(@-) & ancestors('"$base"'))' --no-graph -T 'change_id' 2>/dev/null | head -1)
@@ -245,9 +307,9 @@ case "$op" in
     esac
     ;;
   log-range)
-    base="${1:-$(get_default_branch)}"
+    base=$(get_base_branch)
     case "$vcs" in
-      git) git log "origin/${base}..HEAD" --oneline -- "${@:2}" ;;
+      git) git log "origin/${base}..HEAD" --oneline -- "$@" ;;
       jj)  jj log -r "${base}..@-" --no-graph -T 'separate(" ", commit_id.shortest(8), change_id.shortest(8), description.first_line()) ++ "\n"' 2>/dev/null ;;
       *)   echo "vcs-op: no VCS detected" >&2; exit 1 ;;
     esac
@@ -267,9 +329,18 @@ case "$op" in
     ;;
   branch)
     name="${1:?branch name required}"
-    base="${2:-$(get_default_branch)}"
+    base=$(get_base_branch)
     case "$vcs" in
-      git) git branch "$name" "origin/$base" ;;
+      git)
+        # Hard-error if the parent isn't on the remote: a silent local-ref
+        # fallback would make the branch parent and the PR target diverge
+        # (reviewers see origin/<base>, the branch was cut from local <base>).
+        if ! git rev-parse --verify "refs/remotes/origin/$base" >/dev/null 2>&1; then
+          echo "vcs-op branch: origin/$base not found. Push the parent branch before stacking." >&2
+          exit 1
+        fi
+        git branch "$name" "origin/$base"
+        ;;
       jj)
         jj new "$base" && jj bookmark create "$name" -r @
         ;;
@@ -328,7 +399,7 @@ case "$op" in
     ;;
   *)
     echo "vcs-op: unknown operation '$op'" >&2
-    echo "Available: detect, fetch, remote-url, head-revision, head-commit-sha, default-branch, dirty, diff-range, diff-names, diff-stat, new-files, log-range, log-head, branch, commit, push, fix-commit" >&2
+    echo "Available: detect, fetch, remote-url, head-revision, head-commit-sha, default-branch, current-branch, base, dirty, diff-range, diff-names, diff-stat, new-files, log-range, log-head, branch, commit, push, fix-commit" >&2
     exit 1
     ;;
 esac
