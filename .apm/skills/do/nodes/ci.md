@@ -38,7 +38,7 @@ CI commands are typically local (e.g. `nix flake check`, `just ci`, `make ci`) a
 **Flaky vs real**: A failure is flaky only if it **passes on a subsequent retry**. Consistent failure = real bug. Before retrying, read the failing test code to judge whether the pattern is inherently flaky.
 
 **If flaky** (max 3 retries): Retry just the failing step.
-**If real bug** (max 5 fixes): Fix → **fmt** → **commit** → retry CI. Under `--no-vcs`, drop **commit** from the loop.
+**If real bug** (max 5 fixes): Fix → **fmt** → **targeted-commit** (`paths:[<this fix's files>]`, per **Commit policies** in SKILL.md §commit — the loop just edited the files, and `--from ci-only` skips sync's dirty-tree hint, so a sweep would swallow unwarned WIP) → retry CI. Under `--no-vcs`, drop **commit** from the loop.
 **If retries exhausted**: Record `status: failed`, halt. The draft PR stays open as the record of the failed attempt.
 
 ## Delegation
@@ -71,6 +71,6 @@ loop:
   if attempts_real > 5:
     return { verdict: "failed-after-budget" }
 
-  fix → fmt → commit (drop commit if --no-vcs)
+  fix → fmt → targeted-commit (paths:[<this fix's files>]; drop commit if --no-vcs)
   continue  # re-run CI
 ```

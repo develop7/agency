@@ -286,36 +286,72 @@ If no format command is documented, skip this step with a note.
 **If `--no-vcs`**: Skip with status `skipped` and reason `"--no-vcs"`. Move to **hickey+lowy**. The working-tree changes
 stay uncommitted — that is the point.
 
-Create a NEW commit (never amend) with a conventional commit message for the primary implementation. Use the
-VCS-agnostic dispatcher:
+Create a NEW commit (never amend) with a conventional commit message for the primary implementation. This node uses
+the **sweep** commit policy: it does not know the feature's full file set ahead of time, so it discovers the paths to
+commit from the actual working-tree state and curates them.
 
-```
-mcp__vcs__repo_commit
-  paths: ["."]
-  message: "<message>"
-mcp__vcs__repo_push
-  branch: "<feature branch>"
-```
+#### Sweep commit recipe
 
-The toolkit handles git and jj uniformly. Git: `repo_commit` is
-`git commit --only -- <paths>` (commits the working-tree content of those
-paths directly, no staging area involved), then `repo_push` is `git push -u
-origin <branch>` for the first push.
-Jujutsu: auto-snapshots the working copy, describes with `jj describe -m "..."`, then `jj new` to start a fresh
-change. Before the `jj new`, the bookmark is on `@` (the change being committed); after, `@` is the new empty change
-and the bookmark is now on `@-` (the just-described commit). If the working copy was started with `jj new` before
-calling `vcs-op commit` (the followup case — see **How to walk the graph**), the bookmark is somewhere up the
-parent chain (`@--`, `@---`, ...). `vcs-op commit` walks the chain to find the bookmark and moves it to `@-` so the
-subsequent `mcp__vcs__repo_push` lands on the new commit. (Note: do **not** start the new change
-with `jj new --no-edit` — see the Jujutsu gotcha above.) Pushes the bookmark with
-`jj git push -b <name>` via `mcp__vcs__repo_push`. `bash scripts/vcs-op log-head` returns the just-described change (`@-` for jj,
-equivalent to `git log -1 --oneline` showing HEAD), so the verify below works for both VCSes.
+1. Read the dirty tree:
+   ```
+   mcp__vcs__repo_status   →  [{ path, old_path, kind }]   (kind ∈ Added | Modified | Deleted | Renamed)
+   ```
+2. **Curate the path list.** For each entry, unless its path is excluded, project to a pathspec:
+   - `Renamed` → `[old_path, new_path]` (both coordinates — `git commit --only` with just the new path does not stage
+     the old path's deletion, so the rename mis-records as add-with-old-surviving; jj is content-based and tolerates the
+     extra path).
+   - `Added` | `Modified` | `Deleted` → `[path]` (for `Deleted`, `--only -- <path>` stages the deletion).
+3. **Excludes** — drop any entry whose path is in the exclude set. Matching is **exact-path or path-prefix set
+   membership** (no glob engine): a path is excluded iff it equals an entry or has it as a directory prefix. The set is:
+   - workflow bookkeeping files (always; the set defined by `scripts/do-results`'s `FILE=` — currently
+     `.do-results.json` — which must never land in a feature commit), plus
+   - any paths/prefixes listed in an optional `## Commit excludes` section of `.agency/do.md` (one per line), for
+     project-environment noise (`dist/`, `coverage/`, generated artifacts).
+4. If the curated list is empty, **skip the commit** (nothing feature-related is dirty — only excludes remain) and treat
+   the recipe as having reported `{ committed: false, reason: "empty-after-exclude" }`.
+5. Commit the curated paths, then push:
+   ```
+   mcp__vcs__repo_commit
+     paths: <curated list from step 2, minus excludes>
+     message: "<conventional message>"
+   mcp__vcs__repo_push
+     branch: "<feature branch>"
+   ```
+6. **Under-commit guard.** Re-run `mcp__vcs__repo_status`; assert the tree is empty or contains only excluded paths. Any
+   other dirty entry means the commit missed a file (e.g. a rename's other side, or a formatter write-back that landed
+   after the read) — go back to step 1 before recording the step, rather than carrying stray dirt into the next commit.
+
+The toolkit handles git and jj uniformly. Git: `repo_commit` is `git commit --only -- <paths>` (commits the
+working-tree content of those paths directly, no staging area involved), then `repo_push` is `git push -u origin
+<branch>` for the first push. Jujutsu: `repo_commit` is `jj commit <filesets>` — it snapshots the working copy,
+creates a commit from the current change for exactly those filesets, and starts a new change; the bookmark stays put
+and is pushed by `jj git push -b <name>` via `repo_push`. `bash scripts/vcs-op log-head` returns the just-described
+change (`@-` for jj, equivalent to `git log -1 --oneline` showing HEAD), so the verify below works for both VCSes.
+
+> **Why this node sweeps.** The commit node has no record of which files the feature touched — implement, fmt, and
+> docs all ran in earlier nodes — so it must read the tree. The sync step's dirty-tree hint is the contract that warns
+> the user pre-existing WIP may be committed.
+
+#### Commit policies
+
+Which sites sweep vs. name files explicitly is fixed, not per-run:
+
+| Commit site | Policy | Why |
+|---|---|---|
+| **commit** node (primary feature commit) | **sweep** (recipe above) | No record of the feature's file set — must read the tree. |
+| **hickey-lowy** finding fix | **targeted** (`paths:[<fix files>]`) | The node just applied the fix and ran fmt on the changed files — it knows the exact set. |
+| **police** violation fix | **targeted** | Same. |
+| **ci** fix-loop | **targeted** | Same — and the loop is reachable via `--from ci-only` (sync skipped), so a sweep there would swallow WIP the user was never warned about. |
+
+**Fix-loop commits are always targeted** (the loop just edited the files it commits); only the primary **commit** node
+sweeps. A targeted site passes `paths:[<files this fix touched>]` and never `paths:["."]`.
 
 This is the **primary feature commit**. Downstream **hickey+lowy** and **police** steps produce their own follow-up
 commits — one per finding or violation addressed — which keeps the PR history a readable progression of "what was built,
 then what was refined" rather than a single opaque squash.
 
-**Verify**: `bash scripts/vcs-op log-head` shows a new commit/change on the feature branch, and it's pushed to remote.
+**Verify**: `bash scripts/vcs-op log-head` shows a new commit/change on the feature branch and it's pushed to remote;
+**or** the recipe reported `empty-after-exclude` (nothing feature-related was dirty).
  
 ---
 
@@ -440,10 +476,10 @@ turn:
 
 1. Apply the fix narrowly — only the lines that address this specific finding.
 2. Run the project's format command (from **fmt** instructions) on the changed files, if one is configured.
-3. `mcp__vcs__repo_commit` with `paths: ["."]` and message
-   `refactor(hickey): <short finding label>` (or `refactor(lowy): …` for the lowy lens). The body
-   of the message should restate the finding in one line so the commit is self-explanatory in the
-   log.
+3. `mcp__vcs__repo_commit` with `paths: [<the files this one finding's fix touched>]` and message
+   `refactor(hickey): <short finding label>` (or `refactor(lowy): …` for the lowy lens). **Name the files explicitly**
+   — this is a *targeted* commit, never `paths:["."]` (see **Commit policies**, §commit). The body of the message
+   should restate the finding in one line so the commit is self-explanatory in the log.
 
 **Under `--no-vcs`**: Skip the commit/push steps entirely. Apply fixes to the working tree and move on — the user will
 review the combined working-tree delta themselves. Record the step as passed with verification noting "--no-vcs: fixes
@@ -478,8 +514,10 @@ For each violation reported by `/code-police` (across all three passes), in turn
 
 1. Apply the fix for that one violation — scope the edit tightly.
 2. Run the project's format command on changed files, if configured.
-3. `mcp__vcs__repo_commit` with `paths: ["."]` and message
-   `<prefix>: <short description>` (the conventional prefix identifying the pass and rule):
+3. `mcp__vcs__repo_commit` with `paths: [<the files this one fix touched>]` and message
+   `<prefix>: <short description>` (the conventional prefix identifying the pass and rule). **Name the files
+   explicitly** — this is a *targeted* commit, never `paths:["."]` (see **Commit policies**, §commit). `.do-results.json`
+   and other bookkeeping are naturally absent because this node never edited them.
     - Rules pass: `fix(police): <rule-id> — <short description>` (e.g.
       `fix(police): no-dead-code — remove commented-out fallback`)
     - Fact-check pass: `fix(police): fact-check — <short description>` (e.g.
@@ -659,7 +697,7 @@ retrying, read the failing test code to judge if the failure pattern is inherent
 waits).
 
 **If flaky** (max 3 retries): Retry just the failing step.
-**If real bug** (max 5 fixes): Fix → **fmt** → **commit** → retry CI. Under `--no-vcs`, drop **commit** from the loop (
+**If real bug** (max 5 fixes): Fix → **fmt** → **targeted-commit** (`paths:[<this fix's files>]`, see **Commit policies**, §commit — the loop just edited the files, and `--from ci-only` skips sync's dirty-tree hint, so a sweep would swallow unwarned WIP) → retry CI. Under `--no-vcs`, drop **commit** from the loop (
 Fix → **fmt** → retry CI). The draft PR already exists — subsequent pushes update it automatically, no re-run of *
 *create-pr** needed.
 **If retries exhausted**: Set workflow status to `"failed"`, skip to **done**. The draft PR stays open as the record of

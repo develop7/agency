@@ -37,7 +37,8 @@ For each violation reported by `/code-police` (across all three passes), in turn
 
 1. Apply the fix for that one violation — scope the edit tightly.
 2. Run the project's format command on changed files, if configured.
-3. `mcp__vcs__repo_commit` with `paths: ["."]` and message `<prefix>: <short description>`:
+3. `mcp__vcs__repo_commit` with `paths: [<the files this one fix touched>]` and message `<prefix>: <short description>`:
+    - **Name the files explicitly** — targeted commit, never `paths:["."]` (see **Commit policies**, SKILL.md §commit).
     - Rules pass: `fix(police): <rule-id> — <short description>`
     - Fact-check pass: `fix(police): fact-check — <short description>`
     - Elegance pass: `refactor(police): elegance — <short description>`
@@ -69,7 +70,7 @@ loop:
   for each violation reported:
     apply fix for that one violation
     run fmt on changed files
-    mcp__vcs__repo_commit paths:["."] message:"<prefix>: <description>"
+    mcp__vcs__repo_commit paths:[<this fix's files>] message:"<prefix>: <description>"
     mcp__vcs__repo_push branch:"<feature branch>"
 
   continue  # re-invoke /code-police
