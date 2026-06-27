@@ -5,6 +5,7 @@
 
 setup() {
   load "$REPO_ROOT/tests/helpers/setup.bash"
+  load "$REPO_ROOT/tests/helpers/git-fixtures.bash"
   setup_test_dir
 
   VCS_OP="$(apm_script skills/do/scripts/vcs-op)"
@@ -44,18 +45,14 @@ teardown() {
 # ─── dirty ────────────────────────────────────────────────────────────
 
 @test "dirty: exit 1 on clean tree" {
-  echo "hello" > file.txt
-  git add file.txt
-  git commit -q -m "initial"
+  mk_initial_commit
 
   run bash "$VCS_OP" dirty
   [ "$status" -eq 1 ]
 }
 
 @test "dirty: exit 0 on uncommitted changes" {
-  echo "hello" > file.txt
-  git add file.txt
-  git commit -q -m "initial"
+  mk_initial_commit
   echo "changed" > file.txt
 
   run bash "$VCS_OP" dirty
@@ -65,9 +62,7 @@ teardown() {
 # ─── head-revision ────────────────────────────────────────────────────
 
 @test "head-revision returns current branch name" {
-  echo "hello" > file.txt
-  git add file.txt
-  git commit -q -m "initial"
+  mk_initial_commit
   git checkout -q -b feature-x
 
   run bash "$VCS_OP" head-revision
@@ -78,9 +73,7 @@ teardown() {
 # ─── head-commit-sha ──────────────────────────────────────────────────
 
 @test "head-commit-sha returns a SHA" {
-  echo "hello" > file.txt
-  git add file.txt
-  git commit -q -m "initial"
+  mk_initial_commit
   sha=$(git rev-parse HEAD)
 
   run bash "$VCS_OP" head-commit-sha
@@ -91,9 +84,7 @@ teardown() {
 # ─── default-branch ───────────────────────────────────────────────────
 
 @test "default-branch returns master when origin/HEAD is unset" {
-  echo "hello" > file.txt
-  git add file.txt
-  git commit -q -m "initial"
+  mk_initial_commit
 
   run bash "$VCS_OP" default-branch
   [ "$status" -eq 0 ]
@@ -101,9 +92,7 @@ teardown() {
 }
 
 @test "default-branch returns main when origin/HEAD points to main" {
-  echo "hello" > file.txt
-  git add file.txt
-  git commit -q -m "initial"
+  mk_initial_commit
   git branch -m master main
   git symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/main
 
@@ -115,16 +104,8 @@ teardown() {
 # ─── branch ───────────────────────────────────────────────────────────
 
 @test "branch creates a new branch from origin/base" {
-  echo "hello" > file.txt
-  git add file.txt
-  git commit -q -m "initial"
-
-  # vcs-op branch does: git branch <name> origin/<base>
-  # We need origin/<base> to exist. Create a bare repo and push.
-  git init -q --bare "$TEST_DIR/remote.git"
-  git remote set-url origin "$TEST_DIR/remote.git"
-  git push -q origin master 2>/dev/null
-  git remote set-head origin -a 2>/dev/null
+  mk_initial_commit
+  mk_remote_fixture
 
   run bash "$VCS_OP" branch feat-test master
   [ "$status" -eq 0 ]
@@ -135,9 +116,7 @@ teardown() {
 # ─── commit ───────────────────────────────────────────────────────────
 
 @test "commit stages and commits all changes" {
-  echo "hello" > file.txt
-  git add file.txt
-  git commit -q -m "initial"
+  mk_initial_commit
   echo "world" > file2.txt
 
   run bash "$VCS_OP" commit "feat: add file2"
@@ -153,26 +132,18 @@ teardown() {
 # ─── log-head ─────────────────────────────────────────────────────────
 
 @test "log-head returns one-line log of HEAD" {
-  echo "hello" > file.txt
-  git add file.txt
-  git commit -q -m "initial commit"
+  mk_initial_commit
 
   run bash "$VCS_OP" log-head
   [ "$status" -eq 0 ]
-  [[ "$output" == *"initial commit"* ]]
+  [[ "$output" == *"initial"* ]]
 }
 
 # ─── log-range ────────────────────────────────────────────────────────
 
 @test "log-range shows commits between base and HEAD" {
-  echo "hello" > file.txt
-  git add file.txt
-  git commit -q -m "initial"
-
-  # Set up a remote so origin/master ref exists
-  git init -q --bare "$TEST_DIR/remote.git"
-  git remote set-url origin "$TEST_DIR/remote.git"
-  git push -q origin master 2>/dev/null
+  mk_initial_commit
+  mk_remote_fixture
 
   git checkout -q -b feature
   echo "world" > file2.txt
@@ -188,18 +159,13 @@ teardown() {
 # ─── diff-names ───────────────────────────────────────────────────────
 
 @test "diff-names shows changed files" {
-  echo "hello" > file.txt
-  git add file.txt
-  git commit -q -m "initial"
+  mk_initial_commit
+  mk_remote_fixture
+
   git checkout -q -b feature
   echo "world" > file2.txt
   git add file2.txt
   git commit -q -m "add file2"
-
-  # diff-names uses origin/<base>...HEAD — needs origin ref
-  git init -q --bare "$TEST_DIR/remote.git"
-  git remote set-url origin "$TEST_DIR/remote.git"
-  git push -q origin master 2>/dev/null
 
   run bash "$VCS_OP" diff-names master
   [ "$status" -eq 0 ]
