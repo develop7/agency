@@ -42,12 +42,11 @@ PATTERNS=(
   'jj file list'
 )
 
-extra_args=()
 strict=false
 for arg in "$@"; do
   case "$arg" in
     --strict) strict=true ;;
-    *) extra_args+=("$arg") ;;
+    *) echo "lint-vcs-refs: unknown arg: $arg" >&2; exit 2 ;;
   esac
 done
 
