@@ -34,7 +34,7 @@ test-integration:
 # Run shellcheck on all .apm/ bash scripts
 # SC2148/SC1113/SC2096: scripts are intentionally shebang-less (run via `bash script`)
 lint:
-    find .apm/scripts .apm/hooks/scripts .apm/skills/do/scripts \
+    find .apm/scripts .apm/hooks/scripts .apm/skills/do/scripts tests/helpers \
         -type f ! -name '*.ncl' \
         -exec shellcheck --shell=bash --exclude=SC2148,SC1113,SC2096 {} +
 
