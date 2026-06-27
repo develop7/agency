@@ -139,7 +139,12 @@ See [Kolu's `.agency/`](https://github.com/juspay/kolu/tree/master/.agency) for 
 just apm       # install/regenerate
 just apm-audit # security audit
 just apm-sync  # verify nothing drifted
+just test      # run bats tests (unit + integration)
+just lint      # run shellcheck on .apm/ bash scripts
+just ci        # full CI: tests + lint
 ```
+
+Testing requires [bats-core](https://github.com/bats-core/bats-core): `sudo apt-get install bats`, `brew install bats-core`, or `nix profile install nixpkgs#bats`.
 
 ## Resources
 

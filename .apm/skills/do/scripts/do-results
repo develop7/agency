@@ -73,7 +73,7 @@ ENDJSON
 
   step-end)
     status="${1:?status required (passed|failed|skipped)}"
-    verif="${2:?verification required}"
+    verif="${2:-}"
     reason="${3:-}"
     completedAt="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 

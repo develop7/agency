@@ -39,6 +39,13 @@ behavior (per the **implement** step's classification). A green run that didn't 
 coverage gap, not a pass. Refactor/docs/internal-cleanup diffs are exempt. If a gap is found, treat it as a real
 failure: write the missing test, then loop through **fmt** → **commit** → **test**.
 
+**Resolving coverage for black-box tests**: When the test command runs subprocess-style tests (e.g. bats) without
+coverage instrumentation, resolve the coverage-gap check by **path intersection**: compare
+`bash .../skills/do/scripts/vcs-op diff-names <defaultBranch>` (changed source files) against the test files' mirrored
+paths. Test files live under `tests/` mirroring `.apm/` structure — a test at
+`tests/unit/skills/do/scripts/do-results.bats` covers `.apm/skills/do/scripts/do-results`. If at least one test file
+maps to a changed source file, the check is satisfied.
+
 **Verify**: Tests pass (exit code 0) **and** the new behavior is covered, or the diff is exempt from the coverage check,
 or no relevant tests to run.
 **If failed** (max 4 attempts): Analyze the failure. If flaky, re-run. If real: fix → go to **fmt**, then retry.

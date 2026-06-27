@@ -2,10 +2,18 @@
 *
 
 # Except things we do care of
+!/.apm/
 !/.apm/**
+!/.agency/
+!/.agency/**
+!/docs/
 !/docs/**
+!/tests/
+!/tests/**
+!/website/
 !/website/**
-!/.github/workflows/**
+!/.github/
+!/.github/**
 !/apm.yml
 !/justfile
 !/LICENSE

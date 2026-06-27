@@ -49,10 +49,10 @@ fmt_dur() {
   fi
 }
 
-total_start="$($JQ -r '[.steps[].startedAt] | first // .startedAt' "$FILE")"
+total_start="$($JQ -r '.steps[0].startedAt // .startedAt' "$FILE")"
 total_start_epoch="$(iso_to_epoch "$total_start")"
 
-last_end="$($JQ -r '[.steps[].completedAt] | last // .startedAt' "$FILE")"
+last_end="$($JQ -r '.steps[-1].completedAt // .startedAt' "$FILE")"
 last_end_epoch="$(iso_to_epoch "$last_end")"
 
 total_dur=$(( last_end_epoch - total_start_epoch ))

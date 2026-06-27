@@ -14,7 +14,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 APM_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-SKILLS_DIR="$APM_DIR/skills"
+SKILLS_DIR="${SKILLS_DIR:-"$APM_DIR/skills"}"
 
 # Patterns that look like executable instructions to an LLM agent
 # (backtick-wrapped commands, or standalone command instructions)
