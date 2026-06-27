@@ -26,7 +26,9 @@ bash .../skills/do/scripts/steps/sync <noVcs> [--base <branch> | --stack]
 
 The script:
 
-- Detects the VCS (`.jj/` → `jj`, `.git/` → `git`, else `unknown`) via `mcp__vcs__repo_info` (the tool returns `{backend, root, cwd, forge}` — read `backend` for git/jj).
+- Detects the VCS (`.jj/` → `jj`, `.git/` → `git`, else `unknown`) via `bash scripts/vcs-op detect`
+  (which reads `.do-results.json#vcs` if present, else probes the filesystem). All subsequent VCS
+  operations delegate to `bash scripts/vcs-op` which maps semantic operation names to the active tool.
 - Fetches the default remote (`git fetch origin` / `jj git fetch`).
 - Pins `origin/HEAD` (git only).
 - If `--no-vcs` is **not** set and the branch is behind origin (ahead-count 0), fast-forwards
