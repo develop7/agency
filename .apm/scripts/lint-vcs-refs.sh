@@ -59,30 +59,25 @@ violations=0
 #   are in prose describing vcs-op's internal behavior, not instructions
 #   for the agent to execute directly)
 
-check_file() {
-  local file="$1"
-  local pattern="$2"
-
-  # Non-strict skips: allow git/jj references in these files where they
-  # appear as documented fallback examples, not as executable instructions.
-  if [ "$strict" = false ]; then
-    case "$file" in
-      */do/SKILL.md)        return ;;
-      */talk/SKILL.md)      return ;;
-    esac
-  fi
-
-  if grep -n "$pattern" "$file" 2>/dev/null; then
-    violations=$((violations + 1))
-  fi
+# Non-strict skips: allow git/jj references in these files where they
+# appear as documented fallback examples, not as executable instructions.
+is_exempt() {
+  [ "$strict" = false ] || return 1
+  case "$1" in
+    */do/SKILL.md)    return 0 ;;
+    */talk/SKILL.md)  return 0 ;;
+    *)                return 1 ;;
+  esac
 }
 
 for skill_file in "$SKILLS_DIR"/*/SKILL.md; do
   [ -f "$skill_file" ] || continue
+  is_exempt "$skill_file" && continue
   for pattern in "${PATTERNS[@]}"; do
     if grep -q "$pattern" "$skill_file" 2>/dev/null; then
       echo "::error file=$skill_file::Raw VCS command pattern '$pattern' found. Use \`.../skills/do/scripts/vcs-op\` instead." >&2
-      check_file "$skill_file" "$pattern"
+      grep -n "$pattern" "$skill_file" 2>/dev/null
+      violations=$((violations + 1))
     fi
   done
 done

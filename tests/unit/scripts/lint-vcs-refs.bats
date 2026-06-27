@@ -53,7 +53,7 @@ run_lint() {
   printf 'Internally calls `git diff HEAD`\n' > "$FIXTURE_SKILLS/do/SKILL.md"
   run_lint
   [ "$status" -eq 0 ]
-  [[ "$output" == *"No raw VCS commands found"* ]]
+  [[ "$output" != *"::error"* ]]
 }
 
 @test "do/SKILL.md caught in --strict mode" {
@@ -66,6 +66,7 @@ run_lint() {
   printf 'Agent may run `git log --oneline`\n' > "$FIXTURE_SKILLS/talk/SKILL.md"
   run_lint
   [ "$status" -eq 0 ]
+  [[ "$output" != *"::error"* ]]
 }
 
 @test "talk/SKILL.md caught in --strict mode" {
