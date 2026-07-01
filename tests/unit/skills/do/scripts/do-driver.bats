@@ -78,6 +78,18 @@ run_driver() {
   [[ "$output" == *"unknown flag: --bogus"* ]]
 }
 
+@test "init --base is rejected (sync flag)" {
+  run_driver init --base feat-x "my task"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"--base is a sync flag, not an init flag"* ]]
+}
+
+@test "init --stack is rejected (sync flag)" {
+  run_driver init --stack "my task"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"--stack is a sync flag, not an init flag"* ]]
+}
+
 @test "init with no task: still works (task is optional)" {
   run_driver init
   [ "$status" -eq 0 ]

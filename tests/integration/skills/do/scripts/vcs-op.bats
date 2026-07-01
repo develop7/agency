@@ -107,7 +107,9 @@ teardown() {
   mk_initial_commit
   mk_remote_fixture
 
-  run bash "$VCS_OP" branch feat-test master
+  # base is read from .do-results.json (set by sync); branch takes only <name>.
+  echo '{"base":"master"}' > .do-results.json
+  run bash "$VCS_OP" branch feat-test
   [ "$status" -eq 0 ]
 
   git rev-parse --verify feat-test
@@ -150,7 +152,9 @@ teardown() {
   git add file2.txt
   git commit -q -m "add file2"
 
-  run bash "$VCS_OP" log-range master
+  # base (master) is read from .do-results.json, not a positional arg.
+  echo '{"base":"master"}' > .do-results.json
+  run bash "$VCS_OP" log-range
   [ "$status" -eq 0 ]
   [[ "$output" == *"add file2"* ]]
   [[ "$output" != *"initial"* ]]
@@ -167,9 +171,49 @@ teardown() {
   git add file2.txt
   git commit -q -m "add file2"
 
-  run bash "$VCS_OP" diff-names master
+  echo '{"base":"master"}' > .do-results.json
+  run bash "$VCS_OP" diff-names
   [ "$status" -eq 0 ]
   [[ "$output" == *"file2.txt"* ]]
+}
+
+# ─── base / get_base_branch ───────────────────────────────────────────
+
+@test "base op prints the resolved base from .do-results.json" {
+  mk_initial_commit
+  echo '{"base":"feat-x"}' > .do-results.json
+
+  run bash "$VCS_OP" base
+  [ "$status" -eq 0 ]
+  [ "$output" = "feat-x" ]
+}
+
+@test "get_base_branch hard-errors when base is absent" {
+  mk_initial_commit
+  echo '{}' > .do-results.json
+
+  run bash "$VCS_OP" base
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"base is not set"* ]]
+}
+
+@test "get_base_branch hard-errors when .do-results.json is missing" {
+  mk_initial_commit
+
+  run bash "$VCS_OP" base
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"base is not set"* ]]
+}
+
+# ─── current-branch ───────────────────────────────────────────────────
+
+@test "current-branch returns the checked-out branch" {
+  mk_initial_commit
+  git checkout -q -b feature-y
+
+  run bash "$VCS_OP" current-branch
+  [ "$status" -eq 0 ]
+  [ "$output" = "feature-y" ]
 }
 
 # ─── error paths ──────────────────────────────────────────────────────

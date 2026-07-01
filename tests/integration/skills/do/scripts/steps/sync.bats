@@ -102,3 +102,24 @@ run_sync() {
   [ "$status" -eq 0 ]
   [[ "$output" == *"forge=github"* ]]
 }
+
+@test "sync --base <branch> resolves base to that branch" {
+  run_sync --base feat-parent false
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"base=feat-parent"* ]]
+  run jq -r '.base' .do-results.json
+  [ "$output" = "feat-parent" ]
+}
+
+@test "sync --stack --base are mutually exclusive" {
+  run_sync --base foo --stack true
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"mutually exclusive"* ]]
+}
+
+@test "sync --base is incompatible with --no-vcs" {
+  # --no-vcs means noVcs=true; base selection is meaningless without VCS.
+  run_sync --base foo true
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"incompatible with --no-vcs"* ]]
+}
