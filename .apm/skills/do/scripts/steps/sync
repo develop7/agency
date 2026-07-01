@@ -147,7 +147,14 @@ elif [ "$stack" = "true" ]; then
   if [ -n "$current" ] && [ "$current" != "$default_ref" ] && [ "$current" != "HEAD" ]; then
     base="$current"
   else
-    base="$default_ref"
+    # Fail loud: silently falling back to the default branch would target the
+    # PR at master while looking like a successful stack — the dangerous
+    # direction. The user asked to stack; if there's no feature branch to
+    # stack onto, make them say so explicitly via --base.
+    echo "sync: --stack found no feature branch to stack onto" >&2
+    echo "       current branch is '${current:-<none>}' (default is '$default_ref')." >&2
+    echo "       checkout the feature branch first, or pass --base <branch> explicitly." >&2
+    exit 2
   fi
 else
   base="$default_ref"
