@@ -61,7 +61,10 @@ honors this; opencode/Codex ignore the field and fall through to the active mode
 simpler artifact landing in `master`. A PR that grows because hickey caught a real fragmentation bug is a *better* PR.
 
 If a sub-agent emits anything resembling a defer, flip the disposition to **Fix in this PR** unconditionally and apply
-the fix here.
+the fix here. Findings that genuinely require coordination outside this repo (upstream library bug, breaking dep upgrade,
+schema migration that must ship separately) shouldn't have surfaced as structural-review findings; if one did, apply a
+local workaround or interface boundary in this PR rather than punt — and flag the upstream dependency in the PR
+description as a strategic note, not as a deferred finding.
 
 **Cross-validate the parallel findings.** After first-pass reviews, for each reviewer that produced findings, spawn a
 second invocation of *that same skill* with a self-contained prompt containing the diff and the other reviewer's full
@@ -69,7 +72,8 @@ findings output. Ask: _"Apply your lens to the diff **and** to the other reviewe
 recommendation, if applied, create a problem your lens would flag?"_
 
 Run the two cross-validation calls in parallel. If either surfaces a new finding, treat it identically to a first-pass
-finding.
+finding — apply as its own commit with prefix `refactor(hickey): cross-validate — <short label>` (or
+`refactor(lowy): cross-validate — …`) so the commit log distinguishes cross-validation findings from first-pass ones.
 
 **Apply each "Fix in this PR" finding as its own commit** — do not batch:
 

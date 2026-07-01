@@ -59,4 +59,26 @@ Be specific to this run's data, not generic advice.
 
 **If `forge != github`**: Report the branch name (and remote URL via `bash scripts/vcs-op remote-url`). Print timing table and suggestions to the terminal only.
 
-**If `forge == github`**: Report the PR URL. Then post the final step status table as a **PR comment** using `gh pr comment`.
+**If `forge == github`**: Report the PR URL. Then post the final step status table as a **PR comment** using
+`gh pr comment`. Use the markdown table and slowest-step line emitted by `bash scripts/do-driver summary` verbatim
+(strip the trailing `<<<FACTS ... FACTS` block — that's internal). Format:
+
+```
+gh pr comment --body "$(cat <<'COMMENT'
+## [`/do`](https://github.com/srid/agency) results
+
+| Step | Status | Duration | Verification |
+|------|--------|----------|-------------|
+| sync | ✓ | 3s | ... |
+| research | ✓ | 45s | ... |
+...
+| **Total** | | **4m 32s** | |
+
+### Optimization suggestions
+
+- <2–4 concrete suggestions based on timing data>
+
+Workflow completed at <timestamp>.
+COMMENT
+)"
+```
