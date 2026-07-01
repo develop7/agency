@@ -5,7 +5,8 @@ description: Iterative measurement-driven improvement loop. Measure, profile, mu
 
 # Ralph
 
-Iterative measurement-driven improvement loop. Each cycle: measure → profile → find biggest contributor → mutate → re-measure → commit only if improvement exceeds noise.
+Iterative measurement-driven improvement loop. Each cycle: measure → profile → find biggest contributor → mutate →
+re-measure → commit only if improvement exceeds noise.
 
 ## 0. Gather inputs
 
@@ -18,26 +19,33 @@ Use `AskUserQuestion` to collect:
 
 ## 1. Setup
 
-- Create a feature branch and **draft PR** early (load `forge-pr` skill for title/body). PR description includes a measurements table updated as cycles complete.
-- **Baseline**: measure at least 5 runs, report **median**. For time: distinguish cold (no cache) from hot (cached). Document methodology.
+- Create a feature branch and **draft PR** early (load `forge-pr` skill for title/body). PR description includes a
+  measurements table updated as cycles complete.
+- **Baseline**: measure at least 5 runs, report **median**. For time: distinguish cold (no cache) from hot (cached).
+  Document methodology.
 - Create `docs/<target>-ralph-report.md` with baseline, methodology, optimization log table, and findings.
-- Seed `TaskCreate` list with N cycle tasks — emit all calls as parallel `tool_use` blocks in a single assistant turn so the seed is one model round-trip, not N.
+- Seed `TaskCreate` list with N cycle tasks — emit all calls as parallel `tool_use` blocks in a single assistant turn so
+  the seed is one model round-trip, not N.
 
 ## 2. The loop
 
 Each cycle:
 
 1. **Profile** — break down the metric into components. Measure each independently. Don't guess.
-2. **Classify** — categorize the biggest contributor (unnecessary dep, eager eval, redundant work, wrong abstraction, missing cache, structural overhead).
+2. **Classify** — categorize the biggest contributor (unnecessary dep, eager eval, redundant work, wrong abstraction,
+   missing cache, structural overhead).
 3. **Mutate** — single, targeted change addressing the biggest contributor.
-4. **Re-measure** — same benchmark, same methodology. If improvement is within noise (<3% for time), don't commit — document in report only.
-5. **Commit + push** — only if improvement exceeds noise. Include metrics in commit message. Push report file with each commit.
+4. **Re-measure** — same benchmark, same methodology. If improvement is within noise (<3% for time), don't commit —
+   document in report only.
+5. **Commit + push** — only if improvement exceeds noise. Include metrics in commit message. Push report file with each
+   commit.
 
 ## 3. Wrap-up
 
 - **Final measurement** with same methodology as baseline — this is the number for the PR.
 - **Update PR description** with final before/after table, summary of changes, key findings.
-- **Complete report** with optimization log, dead ends ("Investigated but no improvement"), key findings, and cost breakdown.
+- **Complete report** with optimization log, dead ends ("Investigated but no improvement"), key findings, and cost
+  breakdown.
 - **Run CI** to verify nothing is broken.
 
 ## Rules

@@ -1,4 +1,5 @@
 apm_cmd := "uvx --from 'git+https://github.com/microsoft/apm' apm"
+repo := justfile_directory()
 
 mod website "website/mod.just"
 
@@ -17,3 +18,25 @@ apm-sync: apm apm-audit
         git diff --stat; \
         exit 1; \
     fi
+
+# Run all bats tests (unit + integration)
+test:
+    REPO_ROOT={{ repo }} bats -r tests/
+
+# Run unit tests only (black-box, no VCS fixtures)
+test-unit:
+    REPO_ROOT={{ repo }} bats -r tests/unit/
+
+# Run integration tests (real git fixtures)
+test-integration:
+    REPO_ROOT={{ repo }} bats -r tests/integration/
+
+# Run shellcheck on all .apm/ bash scripts
+# SC2148/SC1113/SC2096: scripts are intentionally shebang-less (run via `bash script`)
+lint:
+    find .apm/scripts .apm/hooks/scripts .apm/skills/do/scripts tests/helpers \
+        -type f ! -name '*.ncl' \
+        -exec shellcheck --shell=bash --exclude=SC2148,SC1113,SC2096 {} +
+
+# Full CI: tests + lint
+ci: test lint
