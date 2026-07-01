@@ -37,7 +37,7 @@ For each violation reported by `/code-police` (across all three passes), in turn
 
 1. Apply the fix for that one violation — scope the edit tightly.
 2. Run the project's format command on changed files, if configured.
-3. `bash .../skills/do/scripts/vcs-op fix-commit "<prefix>: <short description>"` with the conventional prefix:
+3. `bash .../skills/do/scripts/vcs-op fix-commit "<prefix>: <short description>" <file1> <file2> ...` with the conventional prefix. Pass the files the violation fix touched.
    - Rules pass: `fix(police): <rule-id> — <short description>`
    - Fact-check pass: `fix(police): fact-check — <short description>`
    - Elegance pass: `refactor(police): elegance — <short description>`
@@ -67,7 +67,7 @@ loop:
   for each violation reported:
     apply fix for that one violation
     run fmt on changed files
-    bash .../skills/do/scripts/vcs-op fix-commit with conventional prefix (fix/refactor(police): ...)
+    bash .../skills/do/scripts/vcs-op fix-commit with conventional prefix (fix/refactor(police): ...) <changed-files>
 
   continue  # re-invoke /code-police
 ```

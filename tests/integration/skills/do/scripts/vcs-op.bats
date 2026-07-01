@@ -117,11 +117,11 @@ teardown() {
 
 # ─── commit ───────────────────────────────────────────────────────────
 
-@test "commit stages and commits all changes" {
+@test "commit stages and commits the given files" {
   mk_initial_commit
   echo "world" > file2.txt
 
-  run bash "$VCS_OP" commit "feat: add file2"
+  run bash "$VCS_OP" commit "feat: add file2" file2.txt
   [ "$status" -eq 0 ]
 
   run git log -1 --oneline
@@ -129,6 +129,56 @@ teardown() {
 
   # file2.txt should be committed
   git cat-file -e HEAD:file2.txt
+}
+
+@test "commit errors when no files are given" {
+  mk_initial_commit
+  echo "world" > file2.txt
+
+  run bash "$VCS_OP" commit "feat: add file2"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"at least one file required"* ]]
+}
+
+@test "commit errors when a given file is not dirty" {
+  mk_initial_commit
+  echo "world" > file2.txt
+
+  run bash "$VCS_OP" commit "feat: add file2" file2.txt nonexistent.txt
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"not dirty"* ]]
+  [[ "$output" == *"nonexistent.txt"* ]]
+}
+
+@test "commit stages only listed files, leaving others dirty" {
+  mk_initial_commit
+  echo "related" > feature.txt
+  echo "unrelated" > notes.md
+
+  run bash "$VCS_OP" commit "feat: add feature" feature.txt
+  [ "$status" -eq 0 ]
+
+  # feature.txt is committed
+  git cat-file -e HEAD:feature.txt
+  # notes.md is NOT committed — still dirty
+  run git status --porcelain -- notes.md
+  [ "$status" -eq 0 ]
+  [ -n "$output" ]
+}
+
+@test "fix-commit stages given files and pushes" {
+  mk_initial_commit
+  mk_remote_fixture
+  git checkout -q -b feature
+  git push -q -u origin feature 2>/dev/null
+  echo "fix" > fix.txt
+
+  run bash "$VCS_OP" fix-commit "fix: something" fix.txt
+  [ "$status" -eq 0 ]
+
+  run git log -1 --oneline
+  [[ "$output" == *"fix: something"* ]]
+  git cat-file -e HEAD:fix.txt
 }
 
 # ─── log-head ─────────────────────────────────────────────────────────
@@ -236,9 +286,97 @@ teardown() {
 
 @test "jj: detect in jj colocated repo" {
   command -v jj >/dev/null || skip "jj not installed"
-  jj git init --colocate -q 2>/dev/null || skip "jj git init failed"
+  jj git init --colocate 2>/dev/null || skip "jj git init failed"
 
   VCS_OVERRIDE= run bash "$VCS_OP" detect
   [ "$status" -eq 0 ]
   [[ "$output" == "jj" ]]
+}
+
+# ─── jj commit arms (skipped when jj isn't available) ─────────────────
+
+@test "jj: commit with explicit files splits unrelated changes out" {
+  command -v jj >/dev/null || skip "jj not installed"
+  jj git init 2>/dev/null || skip "jj git init failed"
+
+  # Create a base change with a bookmark
+  echo base > README.md
+  jj describe -m "base"
+  jj bookmark create main -r @
+  echo '{"base":"main"}' > .do-results.json
+
+  # Working copy has feature files + an unrelated file
+  jj new main
+  echo feature > feature.txt
+  echo feature-test > feature_test.txt
+  echo junk > notes.md
+
+  run bash "$VCS_OP" commit "feat: add feature" feature.txt feature_test.txt
+  [ "$status" -eq 0 ]
+
+  # @- (the committed feature change) should have only feature files.
+  # Diff from @-- (base) to @- (feature commit) — main bookmark moved to @-
+  # so we can't diff from main anymore.
+  run jj diff --from @-- --to @- --name-only
+  [[ "$output" == *"feature.txt"* ]]
+  [[ "$output" == *"feature_test.txt"* ]]
+  [[ "$output" != *"notes.md"* ]]
+
+  # notes.md should be in a separate revision, not in the feature commit
+  run jj file show notes.md -r @- 2>&1
+  [ "$status" -ne 0 ]
+}
+
+@test "jj: commit with all changed files makes a single commit (no split)" {
+  command -v jj >/dev/null || skip "jj not installed"
+  jj git init 2>/dev/null || skip "jj git init failed"
+
+  echo base > README.md
+  jj describe -m "base"
+  jj bookmark create main -r @
+  echo '{"base":"main"}' > .do-results.json
+
+  jj new main
+  echo feature > feature.txt
+  echo feature-test > feature_test.txt
+
+  # All changed files passed — no split needed
+  run bash "$VCS_OP" commit "feat: add feature" feature.txt feature_test.txt
+  [ "$status" -eq 0 ]
+
+  # @- should have both files. Diff from @-- (base) to @- (feature commit).
+  run jj diff --from @-- --to @- --name-only
+  [[ "$output" == *"feature.txt"* ]]
+  [[ "$output" == *"feature_test.txt"* ]]
+}
+
+@test "jj: commit with no files errors" {
+  command -v jj >/dev/null || skip "jj not installed"
+  jj git init 2>/dev/null || skip "jj git init failed"
+
+  echo base > README.md
+  jj describe -m "base"
+
+  jj new
+  echo feature > feature.txt
+
+  run bash "$VCS_OP" commit "feat: add feature"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"at least one file required"* ]]
+}
+
+@test "jj: commit with a non-dirty file errors" {
+  command -v jj >/dev/null || skip "jj not installed"
+  jj git init 2>/dev/null || skip "jj git init failed"
+
+  echo base > README.md
+  jj describe -m "base"
+
+  jj new
+  echo feature > feature.txt
+
+  run bash "$VCS_OP" commit "feat: add feature" feature.txt nonexistent.txt
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"not dirty"* ]]
+  [[ "$output" == *"nonexistent.txt"* ]]
 }

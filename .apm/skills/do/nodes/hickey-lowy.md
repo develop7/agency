@@ -79,8 +79,7 @@ finding — apply as its own commit with prefix `refactor(hickey): cross-validat
 
 1. Apply the fix narrowly — only the lines that address this specific finding.
 2. Run the project's format command on the changed files, if configured.
-3. `bash .../skills/do/scripts/vcs-op fix-commit "refactor(hickey): <short finding label>"` (or `refactor(lowy): …`). Body
-   restates the finding in one line.
+3. `bash .../skills/do/scripts/vcs-op fix-commit "refactor(hickey): <short finding label>" <file1> <file2> ...` (or `refactor(lowy): …`). Pass the files the finding fix touched. Body restates the finding in one line.
 
 **Under `--no-vcs`**: Skip commit/push. Apply fixes to working tree.
 
@@ -108,7 +107,7 @@ if cross_validate and both reviewers produced findings:
 for each finding with disposition "Fix in this PR":
   apply the fix narrowly
   run fmt on changed files
-  bash .../skills/do/scripts/vcs-op fix-commit "refactor(hickey|lowy): <short label>"
+  bash .../skills/do/scripts/vcs-op fix-commit "refactor(hickey|lowy): <short label>" <changed-files>
   (under --no-vcs: skip commit/push, apply to working tree only)
 
 return { commits, findings_ledger }
