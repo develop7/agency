@@ -241,7 +241,7 @@ commit_with_files() {
       # no ./ prefix) so the subtraction comparison isn't defeated by
       # path-format variation (#13). validate_dirty_files already passed,
       # so each file is dirty and resolves to exactly one canonical path.
-      local canonical_files=() c
+      local canonical_files=() c f
       for f in "${files[@]}"; do
         while IFS= read -r c; do
           [ -n "$c" ] && canonical_files+=("$c")
