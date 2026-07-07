@@ -380,3 +380,43 @@ teardown() {
   [[ "$output" == *"not dirty"* ]]
   [[ "$output" == *"nonexistent.txt"* ]]
 }
+
+@test "jj: commit accepts ./-prefixed paths (no false negative)" {
+  command -v jj >/dev/null || skip "jj not installed"
+  jj git init 2>/dev/null || skip "jj git init failed"
+
+  echo base > README.md
+  jj describe -m "base"
+  jj bookmark create main -r @
+  echo '{"base":"main"}' > .do-results.json
+
+  jj new main
+  echo feature > feature.txt
+  echo more >> README.md
+
+  # ./ prefix must not cause "not dirty" false negative (#13)
+  run bash "$VCS_OP" commit "feat: add feature" ./feature.txt ./README.md
+  [ "$status" -eq 0 ]
+
+  run jj diff --from @-- --to @- --name-only
+  [[ "$output" == *"feature.txt"* ]]
+  [[ "$output" == *"README.md"* ]]
+}
+
+@test "jj: commit accepts absolute paths (no false negative)" {
+  command -v jj >/dev/null || skip "jj not installed"
+  jj git init 2>/dev/null || skip "jj git init failed"
+
+  echo base > README.md
+  jj describe -m "base"
+  jj bookmark create main -r @
+  echo '{"base":"main"}' > .do-results.json
+
+  jj new main
+  echo feature > feature.txt
+
+  local abs
+  abs="$(pwd)/feature.txt"
+  run bash "$VCS_OP" commit "feat: add feature" "$abs"
+  [ "$status" -eq 0 ]
+}
