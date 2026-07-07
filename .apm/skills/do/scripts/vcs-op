@@ -201,7 +201,7 @@ validate_dirty_files() {
         fi
         ;;
       jj)
-        if ! jj diff --name-only 2>/dev/null | grep -qxF "$f"; then
+        if [ -z "$(jj diff --name-only -- "$f" 2>/dev/null)" ]; then
           bad+=("$f")
         fi
         ;;
