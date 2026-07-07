@@ -237,12 +237,22 @@ commit_with_files() {
     jj)
       local all_changed to_split=()
       all_changed="$(jj diff --name-only 2>/dev/null)"
-      # Set subtraction: to_split = all_changed - files
-      local f found
+      # Canonicalize caller's files to jj-normal form (repo-root-relative,
+      # no ./ prefix) so the subtraction comparison isn't defeated by
+      # path-format variation (#13). validate_dirty_files already passed,
+      # so each file is dirty and resolves to exactly one canonical path.
+      local canonical_files=() c
+      for f in "${files[@]}"; do
+        while IFS= read -r c; do
+          [ -n "$c" ] && canonical_files+=("$c")
+        done < <(jj diff --name-only -- "$f" 2>/dev/null)
+      done
+      # Set subtraction: to_split = all_changed - canonical_files
+      local found
       while IFS= read -r changed; do
         [ -z "$changed" ] && continue
         found=false
-        for f in "${files[@]}"; do
+        for f in "${canonical_files[@]}"; do
           if [ "$changed" = "$f" ]; then
             found=true
             break

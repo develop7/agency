@@ -420,3 +420,30 @@ teardown() {
   run bash "$VCS_OP" commit "feat: add feature" "$abs"
   [ "$status" -eq 0 ]
 }
+
+@test "jj: commit with ./-prefixed path is not misclassified as unrelated" {
+  # Regression: before the fix, ./README.md != README.md in the set
+  # subtraction, so the caller's own file was split into a chore commit (#13).
+  command -v jj >/dev/null || skip "jj not installed"
+  jj git init 2>/dev/null || skip "jj git init failed"
+
+  echo base > README.md
+  jj describe -m "base"
+  jj bookmark create main -r @
+  echo '{"base":"main"}' > .do-results.json
+
+  jj new main
+  echo feature > feature.txt
+  echo junk > notes.md
+
+  # Commit feature.txt with ./ prefix while notes.md is also dirty.
+  # feature.txt must land in the feature commit, NOT be split as "unrelated".
+  run bash "$VCS_OP" commit "feat: add feature" ./feature.txt
+  [ "$status" -eq 0 ]
+
+  # @- is the feature commit; @-- is base. Only feature.txt should be there.
+  run jj diff --from @-- --to @- --name-only
+  [[ "$output" == *"feature.txt"* ]]
+  [[ "$output" != *"notes.md"* ]]
+  [[ "$output" != *"README.md"* ]]
+}
