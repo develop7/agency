@@ -26,6 +26,18 @@ description: Attach empirical evidence to the PR (opt-in).
 
 **Otherwise**: Read `.agency/do.md` and look for a `## PR evidence` section. If missing or empty, skip with status `skipped` and reason `"no PR evidence section in .agency/do.md"` — the default for projects that haven't opted in.
 
+**The trigger is visual *or* behavioral.** The proof that matters is sometimes a pixel diff (visual) and sometimes "does
+state survive the interaction or a restart?" (behavioral). A behavioral fix — persistence, restore, session, autosave,
+debounce/coalesce, reconnect — routinely has **no visual diff** yet is exactly where a survives-restart capture proves
+the fix didn't break recoverability. Bug fixes default to "demonstrate the fixed behavior" even when nothing _looks_
+different; gate evidence on "is there a behavior worth proving," not on a pixel changing.
+
+**Read the trigger broadly.** The project's `## PR evidence` section supplies the capture mechanism; the criterion for
+_when to fire_ is the visual-or-behavioral framing above. If the section's wording leans visual ("when the change has
+visible UI impact") but the diff is a behavioral fix, capture the behavior anyway — the absence of a visual diff is not
+a reason to skip. Only skip when there's genuinely no behavior worth proving (a pure refactor, a docs change, an
+internal cleanup with no observable before→after).
+
 **If the section is present**:
 
 The section is project-specific and free-form: inline prose, pointer to another file, script reference, or any combination. Read it, then **spawn a sub-agent** (`Agent`/`task` with `subagent_type: "general-purpose"`) so the capture work doesn't pollute `/do`'s main context.

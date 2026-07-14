@@ -18,7 +18,7 @@ Agency[^agency] is a near-autonomous workflow for coding agents, packaged as an 
 
 The autonomous loop is only as good as the feedback signal it gets. If the agent can't tell whether its change actually worked, no amount of model capability papers over that gap. End-to-end tests are a prerequisite, not a nice-to-have — unit tests and type-checks alone aren't enough. What "e2e" means depends on the surface:
 
-- **Frontend** → screenshot evidence in PRs ([example](https://github.com/juspay/kolu/pull/791#issuecomment-4352641175)). First-class evidence as a workflow step is tracked in [#106](https://github.com/srid/agency/issues/106).
+- **Frontend** → screenshot evidence in PRs ([example](https://github.com/juspay/kolu/pull/791#issuecomment-4352641175)) for visual changes — and a survives-restart capture for behavioral fixes that have no visual diff (persistence / restore / round-trip paths). First-class evidence as a workflow step is tracked in [#106](https://github.com/srid/agency/issues/106).
 - **Nix-based infra** → NixOS VM tests. Honest tradeoff: a VM isn't a live environment, mocking is often required, and reaching real fidelity for non-trivial infra takes effort — but it's still the closest thing to an executable spec the agent can drive.
 - **Backend / library** → fast, deterministic e2e suites the agent can run in a tight loop. Slow or flaky suites destroy the loop; a 30-second deterministic run beats a 10-minute thorough one.
 
@@ -67,7 +67,7 @@ Review the staged changes before committing. Pasting the same prompt again later
 ### Primary skills
 
 - **`do`** — Full pipeline: research → implement → structural review (`hickey`, `lowy`) → quality gate (`code-police`) → CI → evidence (opt-in) → ship. Skip specific steps by mentioning them in the prompt, or pass **`--minimal`** to skip docs / structural review / police / evidence wholesale on trivially-scoped diffs (one-line fixes, typos, config tweaks).
-- **`talk`** — Conversation-and-research mode. Discuss ideas, explore approaches, read code, inspect upstream sources in temporary scratch space when needed — read-only by default. Auto-runs `hickey` + `lowy` on design sketches. Pass **`--html`** to write the response as a self-contained HTML artifact in `$PWD` instead of replying in chat — pair with a runner that can render and select-to-comment on the artifact (e.g. [juspay/kolu#922](https://github.com/juspay/kolu/pull/922)) for tight comment-driven iteration on the same file. When the topic involves UI work, the artifact embeds *rendered* HTML/CSS prototypes of the proposed components so you can react to the visual itself, not a prose description of it.
+- **`talk`** — Conversation-and-research mode. Discuss ideas, explore approaches, read code, inspect upstream sources in temporary scratch space when needed — read-only by default. Auto-runs `hickey` + `lowy` on design sketches. Pass **`--html`** to write the response as a self-contained HTML artifact (in `docs/plans/` if that directory exists, else the repo root) instead of replying in chat — pair with a runner that can render and select-to-comment on the artifact (e.g. [juspay/kolu#922](https://github.com/juspay/kolu/pull/922)) for tight comment-driven iteration on the same file. When the topic involves UI work, the artifact embeds *rendered* HTML/CSS prototypes of the proposed components so you can react to the visual itself, not a prose description of it.
 - **`ralph`** — Iterative measurement-driven improvement loop. Measure, profile, mutate, re-measure, commit. Works for performance, bundle size, complexity — anything quantifiable.
 
 ### Supporting skills
@@ -118,10 +118,14 @@ just ci
 Keep README.md in sync with user-facing changes.
 
 ## PR evidence
-For every PR that touches the UI:
+Capture proof when the change has a behavior worth proving — **visual** (a UI diff) or
+**behavioral** (state survives an interaction or a restart, e.g. a persistence / restore /
+debounce / reconnect fix with no visual diff):
 
-1. Use the `chrome-devtools` MCP to launch `npm run dev` and navigate to the affected route.
-2. Capture a screenshot of the new state and upload it via `gh api` to the repo's release-asset endpoint.
+1. Use the `chrome-devtools` MCP to launch `npm run dev` and exercise the affected route — for
+   a behavioral fix, drive the before→after round-trip (e.g. change state → restart → restore).
+2. Capture a screenshot (or a video, for motion or a round-trip) and upload it via `gh api` to
+   the repo's release-asset endpoint.
 3. Embed the resulting URL inline in the PR comment under `## Evidence`.
 ```
 

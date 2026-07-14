@@ -112,7 +112,7 @@ Rules:
   non-GitHub forges) go straight to `completed`. Record the skip with a back-to-back
   `bash scripts/do-results step-start <name>` / `bash scripts/do-results step-end skipped ... "<reason>"`; the task list just
   shows the step as done. `--minimal` skips are **not** in this category — they're omitted from the seeded list
-  entirely (see above), so there's no task entry to flip.
+  entirely (see above), so there''s no task entry to flip.
 - **Failure**: if retries exhaust and the workflow halts, leave the failing step `in_progress`, mark `done` `completed`
   after the failure summary is written, and run `bash scripts/do-results set status failed`.
 

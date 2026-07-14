@@ -13,7 +13,7 @@ debate trade-offs.
 
 - **Do NOT edit or mutate the current repo.** No `Edit`, `Write`, `NotebookEdit` tool calls against workspace files, and
   no Bash commands that create, modify, or delete files in the checked-out repo. (Sole exception: `--html` mode below,
-  which permits writing a single `.html` artifact to `$PWD`.)
+  which permits writing a single `.html` artifact to the repo root or an existing `docs/plans/`.)
 - **Do NOT run destructive repo commands.** No `git commit`, `git push`, `git add`, `git rm`, or anything else that
   mutates the current repo.
 - You MAY read files (`Read`, `Glob`, `Grep`), run read-only shell commands (`git log`, `git diff`, `ls`), search the
@@ -205,8 +205,10 @@ it.
 ## HTML artifact mode (`--html`)
 
 If `ARGUMENTS` contains `--html` (strip the flag before treating the rest as the topic), respond by writing a
-self-contained `.html` file to `$PWD` instead of replying in chat. Print only the file path — the HTML *is* the
+self-contained `.html` file instead of replying in chat. Print only the file path — the HTML *is* the
 response.
+
+- **Output directory**: write to `docs/plans/` if that directory already exists; otherwise write to the repo root (`$PWD`). Do not create `docs/plans/` — only use it when it's already there.
 
 The point is to pair with a runner that can render the artifact and let the user select text on it to queue comments
 back (e.g. [juspay/kolu#922](https://github.com/juspay/kolu/pull/922)). The user reads the rendered HTML, replies with
@@ -214,8 +216,8 @@ their selected comments as text, you re-emit the updated HTML. The artifact stay
 truth.
 
 - **Filename**: stable for the session — `talk-<short-slug>.html` derived from the topic (lowercase, dashes, no spaces),
-  or `talk.html` if there's no obvious slug. Follow-up turns update the **same** file; do not spawn a new artifact per
-  turn.
+  or `talk.html` if there's no obvious slug, in the output directory above. Follow-up turns update the **same** file; do
+  not spawn a new artifact per turn.
 - **File contents**: self-contained — embedded `<style>` block, no external assets, no JavaScript, no remote fonts.
   Plain semantic markup that renders legibly inside an iframe preview. Carry the same `file:line` citations you would
   put in a text response; the research/citation rules above are unchanged.
@@ -224,8 +226,9 @@ truth.
   renders the file, so the user sees the proposed UI alongside the rationale and can comment on the visual itself.
   Approximate the target visual style (colors, spacing, typography); the prototype is static (no JS), but layout and
   hierarchy should be representative enough to react to.
-- **Repo-write exception**: writing that one `.html` file in `$PWD` is the only mutation `--html` permits. No `Edit` on
-  pre-existing repo files, no `git` writes, no destructive ops — the rest of talk mode's read-only posture holds.
+- **Repo-write exception**: writing that one `.html` file in the output directory above is the only mutation `--html`
+  permits. No `Edit` on pre-existing repo files, no `git` writes, no destructive ops — the rest of talk mode's
+  read-only posture holds.
 - **Follow-up loop**: when the user replies with comments (typically pasted from a select-and-queue surface as a
   Markdown list), re-emit the **full** revised HTML and print the file path again. Do not narrate the diff in chat; the
   updated artifact is the reply.
