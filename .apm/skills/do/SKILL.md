@@ -134,7 +134,7 @@ Rules:
 - **Never skip steps** (unless Nickel reports `skip = true`, or — for **evidence** — the project hasn't filled in a
   `## PR evidence` section in `.agency/do.md`). Run them in order from entry point to **done**.
 - **Every commit is NEW.** Never amend, rebase, or force-push.
-- **Always commit through `vcs-op`.** Never run raw `git add`, `git commit`, `git rebase`, `jj describe`, `jj new`, `jj split`, or `jj rebase` directly — they bypass the dispatcher's bookmark/split hygiene and can amend an existing change. `vcs-op commit` / `vcs-op fix-commit` guarantee a fresh empty `@` as a post-condition; raw commands don't.
+- **Always commit through `vcs-op`.** Never run raw `git`/`jj` mutating commands directly — they bypass the dispatcher's bookmark/split hygiene and can amend an existing change. `vcs-op commit` / `vcs-op fix-commit` guarantee a fresh empty `@` as a post-condition; raw commands don't. The canonical banned-primitive list lives in `scripts/lint-vcs-refs.sh` (`VCS_PATTERNS`).
 - **Feature branches only.** Never commit to master/main.
 - **Background for CI.** Run CI with `run_in_background: true`.
 - **No questions.** Don't use `AskUserQuestion` outside the `--review` plan pause (post-research).
