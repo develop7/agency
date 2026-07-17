@@ -12,7 +12,7 @@ description: Timing summary, optimization suggestions, and wrap-up.
 ## Ensures
 
 - Timing table emitted
-- Final PR comment posted (if github)
+- Final PR comment posted (if the forge supports PR comments)
 - Workflow status set to completed or failed
 
 ## Strategies
@@ -21,7 +21,7 @@ Present a summary of all steps with their verification status. If any step has a
 
 `"completed"` requires **all steps `passed`**, with six exceptions that count toward completion:
 
-1. A step `skipped` with `reason` beginning `"non-<forge> forge:"`.
+1. A step `skipped` with `reason` `"forge does not support PR comments"`.
 2. A step `skipped` with `reason` `"--no-vcs"`.
 3. A step `skipped` with `reason` `"no PR evidence section in .agency/do.md"`.
 4. A step `skipped` with `reason` `"--minimal"`.
@@ -57,14 +57,14 @@ Be specific to this run's data, not generic advice.
 
 **If `--no-vcs`**: Print the timing table and optimization suggestions to the terminal only. List files modified in the working tree (`bash scripts/vcs-op dirty`). Remind the user that changes are uncommitted.
 
-**If `forge != github`**: Report the branch name (and remote URL via `bash scripts/vcs-op remote-url`). Print timing table and suggestions to the terminal only.
+**If `!supportsPrComment`** (read from state): Report the branch name (and remote URL via `bash scripts/vcs-op remote-url`). Print timing table and suggestions to the terminal only.
 
-**If `forge == github`**: Report the PR URL. Then post the final step status table as a **PR comment** using
-`gh pr comment`. Use the markdown table and slowest-step line emitted by `bash scripts/do-driver summary` verbatim
+**If `supportsPrComment`**: Report the PR URL. Then post the final step status table as a **PR comment** using
+`bash scripts/forge-op pr-comment --body-file -`. Use the markdown table and slowest-step line emitted by `bash scripts/do-driver summary` verbatim
 (strip the trailing `<<<FACTS ... FACTS` block — that's internal). Format:
 
-```
-gh pr comment --body "$(cat <<'COMMENT'
+```sh
+bash scripts/forge-op pr-comment --body-file - <<'COMMENT'
 ## [`/do`](https://github.com/srid/agency) results
 
 | Step | Status | Duration | Verification |
@@ -80,5 +80,4 @@ gh pr comment --body "$(cat <<'COMMENT'
 
 Workflow completed at <timestamp>.
 COMMENT
-)"
 ```

@@ -47,9 +47,11 @@ do not drop the `bash` prefix in commands, and do not rely on the shebang.
 
 ## Arguments
 
-The workflow is **forge-aware**: it auto-detects whether the repo lives on GitHub or elsewhere during the **sync** step.
-Only GitHub has an active code path today — Bitbucket/other forges gracefully skip PR-related steps.
-Tracking: [srid/agency#10](https://github.com/srid/agency/issues/10).
+The workflow is **forge-aware**: it auto-detects whether the repo lives on GitHub or elsewhere during the **sync** step,
+which pre-computes `supportsX` capability booleans by querying `forge-op supports <op>`. Nodes and skip predicates
+branch on these booleans — they never reference forge names directly, so the forge → supported-ops map lives in one
+place (`forge-op`'s capability table). Today only GitHub has an active code path; Bitbucket/other forges gracefully
+skip PR-related steps. Tracking: [srid/agency#10](https://github.com/srid/agency/issues/10).
 
 - `--review`: Pause after **research** for user plan approval via `EnterPlanMode`/`ExitPlanMode`, then continue
   autonomously. **Incompatible with `--from=<non-default>`** (any entry that skips research — `followup`,
@@ -109,7 +111,7 @@ Rules:
   the entry point as `completed` immediately after seeding, so the checklist shows a consistent view regardless of entry
   point.
 - **Skipped steps that stay in the list** (e.g. `branch`/`commit`/`create-pr` under `--no-vcs`, or PR steps on
-  non-GitHub forges) go straight to `completed`. Record the skip with a back-to-back
+  forges that don't support them) go straight to `completed`. Record the skip with a back-to-back
   `bash scripts/do-results step-start <name>` / `bash scripts/do-results step-end skipped ... "<reason>"`; the task list just
   shows the step as done. `--minimal` skips are **not** in this category — they're omitted from the seeded list
   entirely (see above), so there''s no task entry to flip.
@@ -135,6 +137,6 @@ Rules:
 - **Background for CI.** Run CI with `run_in_background: true`.
 - **No questions.** Don't use `AskUserQuestion` outside the `--review` plan pause (post-research).
 - **Never stop between steps.** After completing a step, immediately proceed to the next one.
-- **Complete the full workflow.** The task is not done until a PR URL (GitHub), a pushed branch name (non-GitHub
-  forges), or a working-tree summary (`--no-vcs`) is reported.
+- **Complete the full workflow.** The task is not done until a PR URL (forge with PR support), a pushed branch name
+  (forge without PR support), or a working-tree summary (`--no-vcs`) is reported.
 - **Exhausted retries = halt.** If `ci` or `test` retries are exhausted, set status to `"failed"` and skip to **done**.

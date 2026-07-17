@@ -1,0 +1,174 @@
+# Forge operation dispatcher. Translates named forge operations into the
+# appropriate forge-CLI commands (gh for GitHub, bkt for Bitbucket when #10
+# lands). Consumers call this instead of raw `gh` / `bkt` commands — the
+# mirror of vcs-op one layer up (vcs-op abstracts git/jj; forge-op abstracts
+# the remote host API).
+#
+# Two surfaces:
+#
+#   forge-op supports <op>   → exit 0 if the detected forge supports <op>,
+#                              exit 1 if not. Reads an internal capability
+#                              table. sync calls this to pre-compute
+#                              supportsX booleans into .do-results.json so
+#                              nodes and workflow.ncl never reference forge
+#                              names directly.
+#
+#   forge-op <op> [args]      → dispatch the operation. Body-bearing ops
+#                              (pr-create, pr-edit, pr-comment) take
+#                              --body-file <path|->; "-" reads from stdin
+#                              and pipes straight to `gh --body-file -` (gh
+#                              supports stdin via --body-file -), so no
+#                              tempfile is needed.
+#
+# Detection: reads $forge from .do-results.json (written by sync). If that
+# is absent, falls back to classifying the origin URL via vcs-op remote-url.
+#
+# Usage:
+#   forge-op supports <op>
+#   forge-op pr-view
+#   forge-op pr-create [--draft] --head <branch> --base <branch> --title "<t>" [--body-file <path|->]
+#   forge-op pr-edit [--title "<t>"] [--body-file <path|->]
+#   forge-op pr-comment [--body-file <path|->]
+#   forge-op issue-view <url>
+#
+# Operations:
+#   supports <op>  → capability query (exit 0/1)
+#   pr-view        → prints PR info for the current branch (or exits non-zero if none)
+#   pr-create      → create a (draft) PR
+#   pr-edit        → edit title and/or body of the current branch's PR
+#   pr-comment     → post a comment on the current branch's PR
+#   issue-view     → print an issue's body (GitHub only — BB Server has no issues)
+#   pr-checks      → print CI check status for the current branch's PR
+#
+# Capability table (the single source of "which forge supports which op"):
+#   github:    pr-view ✓  pr-create ✓  pr-edit ✓  pr-comment ✓  issue-view ✓  pr-checks ✓
+#   bitbucket: all ✗ until #10 lands (no dispatch arm — the default
+#              "unsupported forge" catch handles it)
+#   unknown:   all ✗
+#
+# When #10 lands: add bitbucket dispatch arms + flip the table entries for
+# bitbucket to ✓. sync, workflow.ncl, nodes, forge-pr — none change.
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/lib/state.sh"
+
+# Resolve forge from state, with a URL-classification fallback (mirrors
+# vcs-op's detect_vcs fallback). sync is the canonical writer; this fallback
+# covers direct invocation outside the workflow (e.g. ralph loading forge-pr
+# without running sync first).
+detect_forge() {
+  if [ -n "${FORGE_OVERRIDE:-}" ]; then
+    echo "$FORGE_OVERRIDE"
+    return
+  fi
+  local f
+  f="$(state_get forge)"
+  if [ -n "$f" ]; then
+    echo "$f"
+    return
+  fi
+  local url
+  url="$(bash "$SCRIPT_DIR/vcs-op" remote-url 2>/dev/null || echo "")"
+  case "$url" in
+    *github.com*)  echo github ;;
+    *bitbucket.*)  echo bitbucket ;;
+    *)             echo unknown ;;
+  esac
+}
+
+# Capability table. Returns 0 (supported) or 1 (not).
+# Arg: operation name.
+supports() {
+  local op="${1:?op required}"
+  case "$(detect_forge)" in
+    github)
+      case "$op" in
+        pr-view|pr-create|pr-edit|pr-comment|issue-view|pr-checks) return 0 ;;
+        *) return 1 ;;
+      esac
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+# Body-file handling: --body-file - means read from stdin; a path means read
+# the file. Both are passed straight to gh's --body-file flag (gh accepts "-"
+# for stdin natively), so no tempfile indirection is needed.
+#
+# Args: the value passed to --body-file by the caller.
+# Echoes the flag-argument to hand to gh (either "-" or the path).
+resolve_body_file() {
+  local val="${1:?--body-file value required}"
+  echo "$val"
+}
+
+forge="$(detect_forge)"
+
+# Dispatch only on github today. bitbucket/unknown fall through to the
+# default "unsupported forge" error — no stub arm (a stub would be a false
+# receptacle advertising capability it doesn't have; the workflow predicate
+# reading supportsX is the sole gate).
+dispatch_github() {
+  local op="$1"; shift
+  case "$op" in
+    pr-view)
+      gh pr view "$@"
+      ;;
+    pr-create)
+      gh pr create "$@"
+      ;;
+    pr-edit)
+      gh pr edit "$@"
+      ;;
+    pr-comment)
+      gh pr comment "$@"
+      ;;
+    issue-view)
+      gh issue view "$@"
+      ;;
+    pr-checks)
+      gh pr checks "$@"
+      ;;
+    *)
+      echo "forge-op: unknown operation '$op'" >&2
+      echo "Available: supports, pr-view, pr-create, pr-edit, pr-comment, issue-view, pr-checks" >&2
+      exit 1
+      ;;
+  esac
+}
+
+# ── Main dispatch ──────────────────────────────────────────────────────────
+
+op="${1:-}"
+shift || true
+
+case "$op" in
+  supports)
+    subop="${1:?op required (e.g. forge-op supports pr-create)}"
+    if supports "$subop"; then exit 0; else exit 1; fi
+    ;;
+  pr-view|pr-create|pr-edit|pr-comment|issue-view|pr-checks)
+    case "$forge" in
+      github) dispatch_github "$op" "$@" ;;
+      *)
+        echo "forge-op: forge '$forge' does not support '$op'" >&2
+        echo "        Bitbucket support is tracked in srid/agency#10." >&2
+        exit 1
+        ;;
+    esac
+    ;;
+  "")
+    echo "forge-op: no operation given" >&2
+    echo "Usage: forge-op <supports|pr-view|pr-create|pr-edit|pr-comment|issue-view> [args]" >&2
+    exit 1
+    ;;
+  *)
+    echo "forge-op: unknown operation '$op'" >&2
+    echo "Available: supports, pr-view, pr-create, pr-edit, pr-comment, issue-view" >&2
+    exit 1
+    ;;
+esac

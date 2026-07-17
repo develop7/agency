@@ -25,7 +25,30 @@ run_lint() {
   echo "No raw git commands here." > "$FIXTURE_SKILLS/feature-a/SKILL.md"
   run_lint
   [ "$status" -eq 0 ]
-  [[ "$output" == *"No raw VCS commands found"* ]]
+  [[ "$output" == *"No raw VCS or forge commands found"* ]]
+}
+
+@test "gh pr create detected (forge pattern)" {
+  printf 'Run `gh pr create --draft`\n' > "$FIXTURE_SKILLS/feature-a/SKILL.md"
+  run_lint
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"gh pr create"* ]]
+  [[ "$output" == *"forge-op"* ]]
+}
+
+@test "gh issue view detected (forge pattern)" {
+  printf 'Fetch with `gh issue view <url>`\n' > "$FIXTURE_SKILLS/feature-a/SKILL.md"
+  run_lint
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"gh issue view"* ]]
+}
+
+@test "do/nodes/*.md scanned (expanded file scope)" {
+  mkdir -p "$FIXTURE_SKILLS/do/nodes"
+  printf 'Create a PR: `gh pr create --draft`\n' > "$FIXTURE_SKILLS/do/nodes/create-pr.md"
+  run_lint
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"create-pr.md"* ]]
 }
 
 @test "raw git diff detected in non-exempt skill file" {

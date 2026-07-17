@@ -80,6 +80,17 @@
         task | String | default = "",
         active | String | default = "idle",
         status | std.enum.TagOrString | default = 'idle,
+        # Forge capability booleans — written by sync (which calls
+        # `forge-op supports <op>` for each op). Nodes and skip predicates
+        # branch on these instead of on the forge string, so the forge →
+        # supported-ops map lives in one place (forge-op's capability table).
+        # When #10 lands, only forge-op's table + dispatch arms change.
+        supportsPrCreate | Bool | default = false,
+        supportsPrComment | Bool | default = false,
+        supportsIssueView | Bool | default = false,
+        supportsPrEdit | Bool | default = false,
+        supportsPrView | Bool | default = false,
+        supportsPrChecks | Bool | default = false,
         ..
       },
 
@@ -199,7 +210,7 @@
       pattern = 'one-shot,
       next = "ci",
       skip_when | not_exported = fun state =>
-        state.noVcs || state.forge != 'github,
+        state.noVcs || !state.supportsPrCreate,
       requires = ["forge"],
       instructions = "nodes/create-pr.md",
     },
@@ -289,7 +300,7 @@
     should_skip "docs" { active = true, status = 'running, steps = [], noVcs = false, minimal = true, review = false, forge = 'github, has_evidence = false, task = "test" }
     # => true
 
-    should_skip "create-pr" { active = true, status = 'running, steps = [], noVcs = false, minimal = false, review = false, forge = 'bitbucket, has_evidence = false, task = "test" }
+    should_skip "create-pr" { active = true, status = 'running, steps = [], noVcs = false, minimal = false, review = false, forge = 'bitbucket, has_evidence = false, supportsPrCreate = false, supportsPrComment = false, supportsIssueView = false, supportsPrEdit = false, supportsPrView = false, task = "test" }
     # => true
 
     should_skip "evidence" _test_state
@@ -498,6 +509,12 @@
     review = false,
     forge = 'github,
     has_evidence = false,
+    supportsPrCreate = true,
+    supportsPrComment = true,
+    supportsIssueView = true,
+    supportsPrEdit = true,
+    supportsPrView = true,
+    supportsPrChecks = true,
     task = "test",
   },
 }

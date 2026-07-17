@@ -33,10 +33,11 @@ test-integration:
 
 # Run shellcheck on all .apm/ bash scripts
 # SC2148/SC1113/SC2096: scripts are intentionally shebang-less (run via `bash script`)
+# SC1091: scripts source lib/state.sh via a runtime $SCRIPT_DIR path shellcheck can't follow statically
 lint:
     find .apm/scripts .apm/hooks/scripts .apm/skills/do/scripts tests/helpers \
         -type f ! -name '*.ncl' \
-        -exec shellcheck --shell=bash --exclude=SC2148,SC1113,SC2096 {} +
+        -exec shellcheck --shell=bash --exclude=SC2148,SC1113,SC2096,SC1091 {} +
 
 # Full CI: tests + lint
 ci: test lint

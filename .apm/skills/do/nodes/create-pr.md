@@ -1,6 +1,6 @@
 ---
 name: create-pr
-description: Open a draft PR on GitHub.
+description: Open a draft PR on the detected forge.
 ---
 
 # Create PR
@@ -18,15 +18,15 @@ description: Open a draft PR on GitHub.
 
 ## Strategies
 
-Check whether a PR already exists for this branch (`gh pr view`).
+Check whether a PR already exists for this branch (`bash scripts/forge-op pr-view`).
 
 **If no PR exists** (first run, normal path):
 
-1. Create a draft PR: `gh pr create --draft --head <current_branch_name> --base <base branch name>`
+1. Create a draft PR: `bash scripts/forge-op pr-create --draft --head <current_branch_name> --base <base branch name> --title "..." --body-file -`
 
-   **MANDATORY**: Load the `forge-pr` skill (via Skill tool) BEFORE writing the PR title/body.
+   **MANDATORY**: Load the `forge-pr` skill (via Skill tool) BEFORE writing the PR title/body. Pass the body via `--body-file -` (stdin heredoc) so backticks and `$` survive unescaped — `forge-op` pipes stdin straight to `gh --body-file -`, which reads it verbatim.
 
-2. **Post hickey/lowy results**: Post the hickey and lowy analysis as a PR comment using `gh pr comment` with a
+2. **Post hickey/lowy results**: Post the hickey and lowy analysis as a PR comment using `bash scripts/forge-op pr-comment --body-file -` with a
    `## [Hickey/Lowy](https://kolu.dev/blog/hickey-lowy/) Analysis` header.
 
    **Format the comment with a leading findings ledger.** Compose a single table from both sub-agents' Actions sections:
@@ -57,11 +57,11 @@ Check whether a PR already exists for this branch (`gh pr view`).
 
 **If PR already exists** (followup runs, `--from` entry points):
 
-Re-check the PR title/body against current scope. If scope changed, update via `gh pr edit` per the `forge-pr` skill.
+Re-check the PR title/body against current scope. If scope changed, update via `bash scripts/forge-op pr-edit` per the `forge-pr` skill.
 
 **Why this runs before `ci`**: The draft PR is the canonical home for CI status. Opening it before CI runs means CI
 checks land directly on the PR, reviewers see the run history as it happens, and a failing run doesn't leave an orphaned
 branch with red statuses and no PR to explain them.
 
-**Verify**: Draft PR exists (`gh pr view` succeeds), PR title/body matches the delivered scope, hickey/lowy findings
+**Verify**: Draft PR exists (`bash scripts/forge-op pr-view` succeeds), PR title/body matches the delivered scope, hickey/lowy findings
 posted if any.
