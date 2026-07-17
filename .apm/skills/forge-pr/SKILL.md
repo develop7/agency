@@ -5,9 +5,9 @@ description: Write engaging PR titles and descriptions for any forge (GitHub tod
 
 # Forge PR Writing
 
-Write PR descriptions that fellow devs actually want to read. The writing guidance below is forge-agnostic — only the
-`gh` commands in the "Updating existing PRs" section are GitHub-specific today. Bitbucket support is tracked
-in [srid/agency#10](https://github.com/srid/agency/issues/10).
+Write PR descriptions that fellow devs actually want to read. The writing guidance below is forge-agnostic. Forge
+commands (today: `gh` for GitHub; `bkt` for Bitbucket when #10 lands) are dispatched through the `forge-op` script —
+skill markdown never invokes a forge CLI directly, mirroring how `vcs-op` abstracts `git`/`jj`.
 
 ## Anti-patterns (what LLMs typically produce)
 
@@ -108,22 +108,22 @@ Adjust the command as needed — `nix build` for non-runnable outputs, add `#<ou
 relevant one. Omit this section entirely if the change isn't meaningfully testable via `nix run/build` (e.g., CI-only
 changes, documentation, non-Nix repos, or non-GitHub forges where flake refs would be awkward).
 
-## Passing the body to `gh` safely
+## Passing the body to `forge-op` safely
 
-**MANDATORY**: Always pass `--body` to `gh pr create` / `gh pr edit` / `gh pr comment` via a **single-quoted heredoc**
-so backticks, `$`, and `!` survive unescaped. Double-quoted `--body "..."` triggers shell command substitution on
-backticks, and escaping them with `\`` produces literal backslashes in the rendered PR (breaking code fences —
-see [juspay/kolu#402](https://github.com/juspay/kolu/pull/402)).
+**MANDATORY**: Always pass the PR/comment body to `forge-op` via `--body-file -` (stdin) using a **single-quoted
+heredoc** so backticks, `$`, and `!` survive unescaped. `forge-op` pipes stdin straight to `gh --body-file -`, which
+reads it verbatim. Double-quoted `--body "..."` triggers shell command substitution on backticks, and escaping them
+with `\`` produces literal backslashes in the rendered PR (breaking code fences — see
+[juspay/kolu#402](https://github.com/juspay/kolu/pull/402)).
 
 ```sh
-gh pr create --draft --title "..." --base "<defaultBranch>" --head "<headRevision>"  --body "$(cat <<'EOF'
+bash .../skills/do/scripts/forge-op pr-create --draft --title "..." --base "<defaultBranch>" --head "<headRevision>" --body-file - <<'EOF'
 ...body with ```fenced blocks``` intact...
 EOF
-)"
 ```
 
 The `'EOF'` (quoted delimiter) is load-bearing — it disables interpolation inside the heredoc. Never write backticks in
-the body as `\``.
+the body as `\``. The same pattern applies to `forge-op pr-edit --body-file -` and `forge-op pr-comment --body-file -`.
 
 ## Updating existing PRs
 
@@ -131,7 +131,7 @@ When the user pushes further changes to an already-PR'd branch:
 
 1. Check if the PR title/description still accurately reflects the full scope
 2. If new commits meaningfully change what the PR does, update the title and/or body via the forge's edit command (
-   `gh pr edit` on GitHub)
+   `bash .../skills/do/scripts/forge-op pr-edit --body-file -` on GitHub)
 3. Don't rewrite from scratch — amend the existing description to cover new ground
 4. Add a brief note about what changed if the scope expanded significantly
 

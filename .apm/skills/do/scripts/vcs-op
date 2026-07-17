@@ -35,26 +35,12 @@
 
 set -euo pipefail
 
-# `.do-results.json` is cwd-relative (repo root) — matches how
-# `scripts/do-results` resolves `FILE=".do-results.json"`. The workflow always
-# invokes vcs-op from the repo root. Hoisting the jq resolution + field read
-# behind one helper so every reader uses the same mechanism: detect_vcs
-# previously resolved the file via $SCRIPT_DIR/../.. (which points at
-# .apm/skills/, NOT the repo root) and was silently dead, always falling
-# through to the filesystem probe; get_base_branch used cwd-relative. One path.
-JQ="jq"
-if ! command -v jq &>/dev/null; then
-  command -v nix &>/dev/null && JQ="nix run nixpkgs#jq --"
-fi
-STATE=".do-results.json"
-
-# Read a top-level field from .do-results.json. Prints empty (not error) if the
-# file or field is absent or jq is unavailable — callers decide whether an empty
-# result is fatal (get_base_branch errors; detect_vcs falls back to filesystem).
-state_get() {
-  [ -f "$STATE" ] || return 0
-  "$JQ" -r ".${1:?field required} // \"\"" "$STATE" 2>/dev/null || true
-}
+# State-reading helpers (jq resolution + state_get) are shared with forge-op
+# and any other do/ script that reads .do-results.json. Sourcing lib/state.sh
+# gives one resolution path; previously vcs-op inlined this and forge-op would
+# have been a second copy.
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/lib/state.sh"
 
 # Resolve VCS type
 detect_vcs() {

@@ -22,7 +22,7 @@ description: Attach empirical evidence to the PR (opt-in).
 
 **If `--no-vcs`**: Skip with status `skipped` and reason `"--no-vcs"`. There is no PR to attach evidence to.
 
-**If `forge != github`**: Skip with status `skipped` and reason `"non-<forge> forge: <forge>"`. (Bitbucket comment wiring is tracked in #10.)
+**If `!supportsPrComment`**: Skip with status `skipped` and reason `"forge does not support PR comments"`. (Bitbucket comment wiring is tracked in #10.)
 
 **Otherwise**: Read `.agency/do.md` and look for a `## PR evidence` section. If missing or empty, skip with status `skipped` and reason `"no PR evidence section in .agency/do.md"` — the default for projects that haven't opted in.
 
@@ -48,17 +48,16 @@ The sub-agent prompt should include:
 - Standard PR context: PR URL, branch name, base branch, current commit SHA, and `bash scripts/vcs-op diff-names` (read-side seam — the toolkit's `repo_diff_range` is a real gap that vcs-op still covers).
 - An explicit instruction that the sub-agent's job is to return a single block of markdown suitable for posting under a `## Evidence` heading.
 
-After the sub-agent returns, post its output as one PR comment using `gh pr comment` under a `## Evidence` heading. Use the **single-quoted heredoc** pattern so backticks and `$` survive unescaped:
+After the sub-agent returns, post its output as one PR comment using `bash scripts/forge-op pr-comment --body-file -` under a `## Evidence` heading. Use the **stdin heredoc** pattern so backticks and `$` survive unescaped — `forge-op` pipes stdin straight to `gh --body-file -`:
 
 ```sh
-gh pr comment --body "$(cat <<'EOF'
+bash scripts/forge-op pr-comment --body-file - <<'EOF'
 ## Evidence
 
 <markdown returned by the sub-agent>
 EOF
-)"
 ```
 
-Embed image/asset URLs inline in the markdown — `gh pr comment` itself cannot attach files; the workflow section is responsible for telling the sub-agent how to host any binary artifacts so they end up referenceable.
+Embed image/asset URLs inline in the markdown — `forge-op pr-comment` itself cannot attach files; the workflow section is responsible for telling the sub-agent how to host any binary artifacts so they end up referenceable.
 
 **Verify**: Either the step was skipped per the rules above, or a `## Evidence` PR comment exists.

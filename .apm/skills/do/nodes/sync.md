@@ -12,6 +12,9 @@ description: Fetch origin, detect forge, resolve base, initialize workflow state
 ## Ensures
 
 - `forge` — `github`, `bitbucket`, or `unknown`
+- `supportsPrView`, `supportsPrCreate`, `supportsPrEdit`, `supportsPrComment`, `supportsIssueView`, `supportsPrChecks` —
+  capability booleans pre-computed by querying `forge-op supports <op>`. Nodes and skip predicates branch on these
+  instead of on the forge string.
 - `branch` — current branch name
 - `defaultBranch` — origin HEAD ref name (the base-resolution input)
 - `base` — resolved base branch (branch-from + PR target). Equals `defaultBranch` unless `--base <branch>` or `--stack` was passed; this is what enables stacked PRs.
@@ -41,15 +44,20 @@ The script:
   > `--no-vcs`._
 - Classifies the forge from `bash scripts/vcs-op remote-url` — `github.com` → `github`, `bitbucket.` (covers `bitbucket.org`
   and self-hosted servers like `bitbucket.juspay.net`) → `bitbucket`, otherwise `unknown`.
+- Pre-computes forge capability booleans by calling `bash scripts/forge-op supports <op>` for each op
+  (`pr-view`, `pr-create`, `pr-edit`, `pr-comment`, `issue-view`, `pr-checks`) and stashes them via
+  `do-results set supportsX <bool>`. Downstream nodes and skip predicates read these booleans instead of
+  branching on the forge string — the forge → supported-ops map lives in `forge-op`'s capability table.
 - Resolves `base` (`--base <branch>` → that branch; `--stack` → the current feature branch, else
   default; otherwise the default branch) and stashes it via `do-results set base <value>`;
   downstream ops read it in-process via vcs-op's `get_base_branch` rather than re-threading it.
 - Calls `bash scripts/do-results init` then `bash scripts/do-results step sync passed ...`.
 - Prints `vcs=`, `forge=`, `branch=`, `defaultBranch=`, `base=` on stdout for downstream steps.
 
-**Only `github` has an active code path today.** Both `bitbucket` and `unknown` cause forge-dependent steps (PR
-creation, PR comments, PR edits, CI status) to skip gracefully. Bitbucket support is planned —
-see [srid/agency#10](https://github.com/srid/agency/issues/10).
+**Only `github` has an active code path today.** Both `bitbucket` and `unknown` yield `supportsX = false` for all ops,
+causing forge-dependent steps (PR creation, PR comments, PR edits, CI status) to skip gracefully. Bitbucket support is
+planned — see [srid/agency#10](https://github.com/srid/agency/issues/10). When it lands, only `forge-op`'s capability
+table and dispatch arms change; sync, nodes, and `workflow.ncl` are untouched.
 
 **Verify**: Script exited 0 and printed `vcs=`, `forge=`, `branch=`, `defaultBranch=`, `base=` lines on stdout. (Sync silences
 `do-results`' own confirmation echoes so the protocol stays clean.)

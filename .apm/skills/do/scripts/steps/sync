@@ -79,6 +79,7 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DO_RESULTS="$SCRIPT_DIR/../do-results"
 VCS_OP="$SCRIPT_DIR/../vcs-op"
+FORGE_OP="$SCRIPT_DIR/../forge-op"
 
 startedAt="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
@@ -126,6 +127,21 @@ case "$origin_url" in
   *)             forge="unknown" ;;
 esac
 
+# Pre-compute forge capability booleans via forge-op's capability table.
+# Nodes and workflow.ncl skip predicates branch on these instead of on the
+# forge string — the forge → supported-ops map lives in one place (forge-op).
+# When #10 lands, only forge-op's table + dispatch arms change; sync, nodes,
+# and workflow.ncl are untouched.
+supports_to_bool() {
+  if bash "$FORGE_OP" supports "$1" 2>/dev/null; then echo "true"; else echo "false"; fi
+}
+supports_pr_view="$(supports_to_bool pr-view)"
+supports_pr_create="$(supports_to_bool pr-create)"
+supports_pr_edit="$(supports_to_bool pr-edit)"
+supports_pr_comment="$(supports_to_bool pr-comment)"
+supports_issue_view="$(supports_to_bool issue-view)"
+supports_pr_checks="$(supports_to_bool pr-checks)"
+
 # Initialize results, stash /do-specific top-level fields (vcs, forge, noVcs)
 # via the generic `set` command. Suppress do-results' stdout confirmations —
 # sync emits its own protocol below and shouldn't pollute it with do-results'
@@ -134,6 +150,12 @@ esac
 bash "$DO_RESULTS" set vcs "$vcs" >/dev/null
 bash "$DO_RESULTS" set forge "$forge" >/dev/null
 bash "$DO_RESULTS" set noVcs "$noVcs" >/dev/null
+bash "$DO_RESULTS" set supportsPrView "$supports_pr_view" >/dev/null
+bash "$DO_RESULTS" set supportsPrCreate "$supports_pr_create" >/dev/null
+bash "$DO_RESULTS" set supportsPrEdit "$supports_pr_edit" >/dev/null
+bash "$DO_RESULTS" set supportsPrComment "$supports_pr_comment" >/dev/null
+bash "$DO_RESULTS" set supportsIssueView "$supports_issue_view" >/dev/null
+bash "$DO_RESULTS" set supportsPrChecks "$supports_pr_checks" >/dev/null
 
 # Emit structured facts the agent uses for downstream steps
 branch="$(bash "$VCS_OP" head-revision)"
