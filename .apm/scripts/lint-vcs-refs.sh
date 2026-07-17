@@ -72,10 +72,6 @@ violations=0
 # VCS-exempt files:
 # - do/SKILL.md, talk/SKILL.md (orchestration prose / talk-mode allows git)
 # - nodes/branch.md, nodes/sync.md (describe vcs-op internals)
-# nodes/commit.md was previously exempt for descriptive vcs-op-internals prose;
-# that prose was removed (it invited the agent to run raw jj commands — see
-# develop7/agency#16). The file is now scanned like any other, so future
-# prescriptive raw-token mentions get caught at lint time.
 is_vcs_exempt() {
   [ "$strict" = false ] || return 1
   case "$1" in
