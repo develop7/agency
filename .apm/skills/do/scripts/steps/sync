@@ -119,25 +119,24 @@ if [ "$noVcs" = "false" ] && bash "$VCS_OP" dirty; then
   echo "Dirty tree detected. Continuing will create a fresh branch on top of these changes. If you wanted the agent to extend your WIP in place without touching git, re-run with --no-vcs." >&2
 fi
 
-# Forge detection from origin URL
-origin_url="$(bash "$VCS_OP" remote-url)"
-case "$origin_url" in
-  *github.com*)  forge="github" ;;
-  *bitbucket.*)  forge="bitbucket" ;;
-  *)             forge="unknown" ;;
-esac
+# Forge detection — forge-op is the sole classifier (its `detect` subcommand
+# reads the origin URL). Previously sync carried its own copy of the URL→forge
+# glob set; now it delegates, so adding a forge (e.g. gitlab) is one edit in
+# forge-op, not two.
+forge="$(bash "$FORGE_OP" detect)"
 
 # Pre-compute forge capability booleans via forge-op's capability table.
 # Nodes and workflow.ncl skip predicates branch on these instead of on the
 # forge string — the forge → supported-ops map lives in one place (forge-op).
+# Only the ops nodes actually branch on are pre-computed; pr-view and pr-edit
+# have no reader (create-pr trusts that if pr-create is supported, so are
+# view/edit) and are omitted to avoid dead state surface.
 # When #10 lands, only forge-op's table + dispatch arms change; sync, nodes,
 # and workflow.ncl are untouched.
 supports_to_bool() {
   if bash "$FORGE_OP" supports "$1" 2>/dev/null; then echo "true"; else echo "false"; fi
 }
-supports_pr_view="$(supports_to_bool pr-view)"
 supports_pr_create="$(supports_to_bool pr-create)"
-supports_pr_edit="$(supports_to_bool pr-edit)"
 supports_pr_comment="$(supports_to_bool pr-comment)"
 supports_issue_view="$(supports_to_bool issue-view)"
 supports_pr_checks="$(supports_to_bool pr-checks)"
@@ -150,9 +149,7 @@ supports_pr_checks="$(supports_to_bool pr-checks)"
 bash "$DO_RESULTS" set vcs "$vcs" >/dev/null
 bash "$DO_RESULTS" set forge "$forge" >/dev/null
 bash "$DO_RESULTS" set noVcs "$noVcs" >/dev/null
-bash "$DO_RESULTS" set supportsPrView "$supports_pr_view" >/dev/null
 bash "$DO_RESULTS" set supportsPrCreate "$supports_pr_create" >/dev/null
-bash "$DO_RESULTS" set supportsPrEdit "$supports_pr_edit" >/dev/null
 bash "$DO_RESULTS" set supportsPrComment "$supports_pr_comment" >/dev/null
 bash "$DO_RESULTS" set supportsIssueView "$supports_issue_view" >/dev/null
 bash "$DO_RESULTS" set supportsPrChecks "$supports_pr_checks" >/dev/null

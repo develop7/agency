@@ -8,7 +8,6 @@ description: Research the task thoroughly before writing code.
 ## Requires
 
 - Task prompt or issue URL
-- `forge` from sync
 
 ## Ensures
 

@@ -11,10 +11,12 @@ description: Fetch origin, detect forge, resolve base, initialize workflow state
 
 ## Ensures
 
-- `forge` — `github`, `bitbucket`, or `unknown`
-- `supportsPrView`, `supportsPrCreate`, `supportsPrEdit`, `supportsPrComment`, `supportsIssueView`, `supportsPrChecks` —
-  capability booleans pre-computed by querying `forge-op supports <op>`. Nodes and skip predicates branch on these
-  instead of on the forge string.
+- `forge` — `github`, `bitbucket`, or `unknown` (classified by `forge-op detect`; the sole classifier)
+- `supportsPrCreate`, `supportsPrComment`, `supportsIssueView`, `supportsPrChecks` —
+  capability booleans pre-computed by querying `forge-op supports <op>` for the ops
+  nodes actually branch on. Nodes and skip predicates branch on these instead of on
+  the forge string; `pr-view`/`pr-edit` are omitted (no reader — trusted to follow
+  `pr-create`).
 - `branch` — current branch name
 - `defaultBranch` — origin HEAD ref name (the base-resolution input)
 - `base` — resolved base branch (branch-from + PR target). Equals `defaultBranch` unless `--base <branch>` or `--stack` was passed; this is what enables stacked PRs.
@@ -42,12 +44,15 @@ The script:
   > _Dirty tree detected. Continuing will create a fresh branch on top of these changes. If
   > you wanted the agent to extend your WIP in place without touching git, re-run with
   > `--no-vcs`._
-- Classifies the forge from `bash scripts/vcs-op remote-url` — `github.com` → `github`, `bitbucket.` (covers `bitbucket.org`
-  and self-hosted servers like `bitbucket.juspay.net`) → `bitbucket`, otherwise `unknown`.
-- Pre-computes forge capability booleans by calling `bash scripts/forge-op supports <op>` for each op
-  (`pr-view`, `pr-create`, `pr-edit`, `pr-comment`, `issue-view`, `pr-checks`) and stashes them via
-  `do-results set supportsX <bool>`. Downstream nodes and skip predicates read these booleans instead of
-  branching on the forge string — the forge → supported-ops map lives in `forge-op`'s capability table.
+- Classifies the forge by calling `bash scripts/forge-op detect` — forge-op owns the URL→forge
+  classifier (`github.com` → `github`, `bitbucket.` (covers `bitbucket.org` and self-hosted servers
+  like `bitbucket.juspay.net`) → `bitbucket`, otherwise `unknown`). Sync no longer carries its own
+  copy of the glob set.
+- Pre-computes forge capability booleans by calling `bash scripts/forge-op supports <op>` for each
+  op nodes branch on (`pr-create`, `pr-comment`, `issue-view`, `pr-checks`) and stashes them via
+  `do-results set supportsX <bool>`. Downstream nodes and skip predicates read these booleans
+  instead of branching on the forge string — the forge → supported-ops map lives in `forge-op`'s
+  capability table.
 - Resolves `base` (`--base <branch>` → that branch; `--stack` → the current feature branch, else
   default; otherwise the default branch) and stashes it via `do-results set base <value>`;
   downstream ops read it in-process via vcs-op's `get_base_branch` rather than re-threading it.
