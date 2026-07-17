@@ -24,7 +24,7 @@ bash .../skills/do/scripts/vcs-op commit "<message>" <file1> <file2> ...
 bash .../skills/do/scripts/vcs-op push <branch>
 ```
 
-**Pass the files that belong to this feature** — the files you changed during **implement**. The dispatcher stages only those files (git) or splits unrelated working-copy changes into a separate revision above the feature commit (jj), so the commit contains only the feature changes. Unrelated changes are preserved, not discarded. `vcs-op push` sets upstream on first push (git).
+**Pass the files that belong to this feature** — the files you changed during **implement**. The dispatcher stages only those files and preserves unrelated working-copy changes (see `SKILL.md` ## Rules for the git/jj mechanics). `vcs-op push` sets upstream on first push (git).
 
 **Follow-up commits (hickey-lowy, police) go through `vcs-op fix-commit`** — the dispatcher leaves `@` on a fresh empty change, so the next finding's edits land as a separate commit on top. See `SKILL.md` ## Rules for the no-raw-VCS-commands invariant.
 
