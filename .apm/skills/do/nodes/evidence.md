@@ -9,7 +9,6 @@ description: Attach empirical evidence to the PR (opt-in).
 
 - `--minimal` flag
 - `--no-vcs` flag
-- `forge` from sync
 - CI passed
 
 ## Ensures

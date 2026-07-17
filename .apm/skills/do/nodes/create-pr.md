@@ -8,7 +8,6 @@ description: Open a draft PR on the detected forge.
 ## Requires
 
 - `--no-vcs` flag
-- `forge` from sync
 - Primary feature commit pushed
 
 ## Ensures

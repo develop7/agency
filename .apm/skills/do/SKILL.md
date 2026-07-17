@@ -48,10 +48,11 @@ do not drop the `bash` prefix in commands, and do not rely on the shebang.
 ## Arguments
 
 The workflow is **forge-aware**: it auto-detects whether the repo lives on GitHub or elsewhere during the **sync** step,
-which pre-computes `supportsX` capability booleans by querying `forge-op supports <op>`. Nodes and skip predicates
-branch on these booleans — they never reference forge names directly, so the forge → supported-ops map lives in one
-place (`forge-op`'s capability table). Today only GitHub has an active code path; Bitbucket/other forges gracefully
-skip PR-related steps. Tracking: [srid/agency#10](https://github.com/srid/agency/issues/10).
+which delegates classification to `forge-op detect` and pre-computes `supportsX` capability booleans by querying
+`forge-op supports <op>`. Nodes and skip predicates branch on these booleans — they don't branch on the forge string,
+so the forge → supported-ops map lives in one place (`forge-op`'s capability table). The `forge` string itself stays
+in state as the table's input but is no longer a node-facing dependency. Today only GitHub has an active code path;
+Bitbucket/other forges gracefully skip PR-related steps. Tracking: [srid/agency#10](https://github.com/srid/agency/issues/10).
 
 - `--review`: Pause after **research** for user plan approval via `EnterPlanMode`/`ExitPlanMode`, then continue
   autonomously. **Incompatible with `--from=<non-default>`** (any entry that skips research — `followup`,
