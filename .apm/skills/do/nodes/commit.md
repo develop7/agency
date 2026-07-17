@@ -28,7 +28,7 @@ bash .../skills/do/scripts/vcs-op push <branch>
 
 Git: `git add -- <files>` + `git commit -m "..."`. Jujutsu: `jj describe -m "..."`, then if there are unrelated files in the working copy: `jj split <unrelated> -m "chore: unrelated changes"`, `jj rebase -r @- -A @` (move the unrelated revision above the feature commit), move the bookmark to `@` (the feature commit), `jj new <bookmark>` (create a fresh `@` on top of the feature). If there are no unrelated files, degenerates to `jj describe && jj new` + bookmark move. `vcs-op push` sets upstream on first push (git).
 
-**Jujutsu gotcha: `jj new` moves `@` to a new empty change; `jj new --no-edit` does NOT.** If you need to start a new change (e.g. followup work on top of existing WIP before calling `vcs-op commit`), use bare `jj new`. `--no-edit` creates a new change but keeps editing the current one — almost never what the workflow wants; using it by accident means subsequent edits land in the existing change, not the new one, and the workflow has no place to put the new work.
+**Follow-up commits (hickey-lowy, police) go through `vcs-op fix-commit`**, not raw `jj describe`/`jj new`/`git commit` — see the Rules section. `vcs-op commit` / `vcs-op fix-commit` always leave `@` on a fresh empty change, so the next finding's edits land as a separate commit on top. Do not start a new change manually; the dispatcher handles it.
 
 This is the **primary feature commit**. Downstream **hickey-lowy** and **police** steps produce their own follow-up commits — one per finding or violation addressed — which keeps the PR history a readable progression of "what was built, then what was refined" rather than a single opaque squash.
 
