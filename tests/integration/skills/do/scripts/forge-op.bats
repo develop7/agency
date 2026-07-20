@@ -5,7 +5,6 @@
 
 setup() {
   load "$REPO_ROOT/tests/helpers/setup.bash"
-  load "$REPO_ROOT/tests/helpers/git-fixtures.bash"
   setup_test_dir
 
   FORGE_OP="$(apm_script skills/do/scripts/forge-op)"

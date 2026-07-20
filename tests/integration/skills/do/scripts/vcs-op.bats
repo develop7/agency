@@ -5,7 +5,7 @@
 
 setup() {
   load "$REPO_ROOT/tests/helpers/setup.bash"
-  load "$REPO_ROOT/tests/helpers/git-fixtures.bash"
+  load "$REPO_ROOT/tests/helpers/vcs-fixtures.bash"
   setup_test_dir
 
   VCS_OP="$(apm_script skills/do/scripts/vcs-op)"
@@ -299,11 +299,7 @@ teardown() {
   command -v jj >/dev/null || skip "jj not installed"
   jj git init 2>/dev/null || skip "jj git init failed"
 
-  # Create a base change with a bookmark
-  echo base > README.md
-  jj describe -m "base"
-  jj bookmark create main -r @
-  echo '{"base":"main"}' > .do-results.json
+  mk_jj_base_change main
 
   # Working copy has feature files + an unrelated file
   jj new main
@@ -331,10 +327,7 @@ teardown() {
   command -v jj >/dev/null || skip "jj not installed"
   jj git init 2>/dev/null || skip "jj git init failed"
 
-  echo base > README.md
-  jj describe -m "base"
-  jj bookmark create main -r @
-  echo '{"base":"main"}' > .do-results.json
+  mk_jj_base_change main
 
   jj new main
   echo feature > feature.txt
@@ -385,10 +378,7 @@ teardown() {
   command -v jj >/dev/null || skip "jj not installed"
   jj git init 2>/dev/null || skip "jj git init failed"
 
-  echo base > README.md
-  jj describe -m "base"
-  jj bookmark create main -r @
-  echo '{"base":"main"}' > .do-results.json
+  mk_jj_base_change main
 
   jj new main
   echo feature > feature.txt
@@ -407,10 +397,7 @@ teardown() {
   command -v jj >/dev/null || skip "jj not installed"
   jj git init 2>/dev/null || skip "jj git init failed"
 
-  echo base > README.md
-  jj describe -m "base"
-  jj bookmark create main -r @
-  echo '{"base":"main"}' > .do-results.json
+  mk_jj_base_change main
 
   jj new main
   echo feature > feature.txt
@@ -427,10 +414,7 @@ teardown() {
   command -v jj >/dev/null || skip "jj not installed"
   jj git init 2>/dev/null || skip "jj git init failed"
 
-  echo base > README.md
-  jj describe -m "base"
-  jj bookmark create main -r @
-  echo '{"base":"main"}' > .do-results.json
+  mk_jj_base_change main
 
   jj new main
   echo feature > feature.txt
@@ -446,4 +430,275 @@ teardown() {
   [[ "$output" == *"feature.txt"* ]]
   [[ "$output" != *"notes.md"* ]]
   [[ "$output" != *"README.md"* ]]
+}
+
+# ─── jj read-only ops (skipped when jj isn't available) ────────────────
+
+@test "jj: dirty: exit 1 on clean tree" {
+  command -v jj >/dev/null || skip "jj not installed"
+  jj git init 2>/dev/null || skip "jj git init failed"
+  mk_jj_base_change main
+  jj new main
+
+  run bash "$VCS_OP" dirty
+  [ "$status" -eq 1 ]
+}
+
+@test "jj: dirty: exit 0 on uncommitted changes" {
+  command -v jj >/dev/null || skip "jj not installed"
+  jj git init 2>/dev/null || skip "jj git init failed"
+  mk_jj_base_change main
+
+  echo "changed" > README.md
+
+  run bash "$VCS_OP" dirty
+  [ "$status" -eq 0 ]
+}
+
+@test "jj: head-revision returns bookmark on @" {
+  command -v jj >/dev/null || skip "jj not installed"
+  jj git init 2>/dev/null || skip "jj git init failed"
+  mk_jj_base_change main
+
+  run bash "$VCS_OP" head-revision
+  [ "$status" -eq 0 ]
+  [ "$output" = "main" ]
+}
+
+@test "jj: head-revision returns change id when no bookmark on @" {
+  command -v jj >/dev/null || skip "jj not installed"
+  jj git init 2>/dev/null || skip "jj git init failed"
+  mk_jj_base_change main
+  jj new main
+
+  # @ is a fresh empty change with no bookmark
+  run bash "$VCS_OP" head-revision
+  [ "$status" -eq 0 ]
+  [ -n "$output" ]
+  # Should be a change id, not a bookmark name
+  [[ "$output" != "main" ]]
+}
+
+@test "jj: head-commit-sha returns SHA of @-" {
+  command -v jj >/dev/null || skip "jj not installed"
+  jj git init 2>/dev/null || skip "jj git init failed"
+  mk_jj_base_change main
+  jj new main
+  echo feature > feature.txt
+  bash "$VCS_OP" commit "feat: add feature" feature.txt
+
+  # @- is the just-committed feature change; @ is the new empty change.
+  local expected
+  expected="$(jj log -r @- --no-graph -T 'commit_id' 2>/dev/null)"
+
+  run bash "$VCS_OP" head-commit-sha
+  [ "$status" -eq 0 ]
+  [ "$output" = "$expected" ]
+}
+
+@test "jj: default-branch returns master when no remote bookmark exists" {
+  command -v jj >/dev/null || skip "jj not installed"
+  jj git init 2>/dev/null || skip "jj git init failed"
+  mk_jj_base_change main
+
+  run bash "$VCS_OP" default-branch
+  [ "$status" -eq 0 ]
+  [ "$output" = "master" ]
+}
+
+@test "jj: current-branch returns bookmark on @" {
+  command -v jj >/dev/null || skip "jj not installed"
+  jj git init 2>/dev/null || skip "jj git init failed"
+  mk_jj_base_change main
+
+  run bash "$VCS_OP" current-branch
+  [ "$status" -eq 0 ]
+  [ "$output" = "main" ]
+}
+
+@test "jj: current-branch falls back to bookmark on @-" {
+  command -v jj >/dev/null || skip "jj not installed"
+  jj git init 2>/dev/null || skip "jj git init failed"
+  mk_jj_base_change main
+  jj new main
+
+  # @ has no bookmark; @- (the base) has 'main'
+  run bash "$VCS_OP" current-branch
+  [ "$status" -eq 0 ]
+  [ "$output" = "main" ]
+}
+
+@test "jj: base op prints the resolved base from .do-results.json" {
+  command -v jj >/dev/null || skip "jj not installed"
+  jj git init 2>/dev/null || skip "jj git init failed"
+  echo '{"base":"feat-x"}' > .do-results.json
+
+  run bash "$VCS_OP" base
+  [ "$status" -eq 0 ]
+  [ "$output" = "feat-x" ]
+}
+
+@test "jj: get_base_branch hard-errors when base is absent" {
+  command -v jj >/dev/null || skip "jj not installed"
+  jj git init 2>/dev/null || skip "jj git init failed"
+  echo '{}' > .do-results.json
+
+  run bash "$VCS_OP" base
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"base is not set"* ]]
+}
+
+@test "jj: get_base_branch hard-errors when .do-results.json is missing" {
+  command -v jj >/dev/null || skip "jj not installed"
+  jj git init 2>/dev/null || skip "jj git init failed"
+
+  run bash "$VCS_OP" base
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"base is not set"* ]]
+}
+
+# ─── jj diff/log ops (skipped when jj isn't available) ─────────────────
+
+@test "jj: diff-names shows changed files" {
+  command -v jj >/dev/null || skip "jj not installed"
+  jj git init 2>/dev/null || skip "jj git init failed"
+  mk_jj_base_change main
+  bash "$VCS_OP" branch feat >/dev/null
+  echo feature > feature.txt
+  bash "$VCS_OP" commit "feat: add feature" feature.txt
+
+  run bash "$VCS_OP" diff-names
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"feature.txt"* ]]
+}
+
+@test "jj: diff-range shows the diff" {
+  command -v jj >/dev/null || skip "jj not installed"
+  jj git init 2>/dev/null || skip "jj git init failed"
+  mk_jj_base_change main
+  bash "$VCS_OP" branch feat >/dev/null
+  echo feature > feature.txt
+  bash "$VCS_OP" commit "feat: add feature" feature.txt
+
+  run bash "$VCS_OP" diff-range
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"feature"* ]]
+}
+
+@test "jj: diff-stat shows summary" {
+  command -v jj >/dev/null || skip "jj not installed"
+  jj git init 2>/dev/null || skip "jj git init failed"
+  mk_jj_base_change main
+  bash "$VCS_OP" branch feat >/dev/null
+  echo feature > feature.txt
+  bash "$VCS_OP" commit "feat: add feature" feature.txt
+
+  run bash "$VCS_OP" diff-stat
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"feature.txt"* ]]
+}
+
+@test "jj: new-files lists added files" {
+  command -v jj >/dev/null || skip "jj not installed"
+  jj git init 2>/dev/null || skip "jj git init failed"
+  mk_jj_base_change main
+  bash "$VCS_OP" branch feat >/dev/null
+  echo feature > feature.txt
+  bash "$VCS_OP" commit "feat: add feature" feature.txt
+
+  run bash "$VCS_OP" new-files
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"feature.txt"* ]]
+}
+
+@test "jj: log-range shows commits between base and HEAD" {
+  command -v jj >/dev/null || skip "jj not installed"
+  jj git init 2>/dev/null || skip "jj git init failed"
+  mk_jj_base_change main
+  bash "$VCS_OP" branch feat >/dev/null
+  echo feature > feature.txt
+  bash "$VCS_OP" commit "feat: add feature" feature.txt
+
+  run bash "$VCS_OP" log-range
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"feat: add feature"* ]]
+}
+
+@test "jj: log-head returns one-line log of @-" {
+  command -v jj >/dev/null || skip "jj not installed"
+  jj git init 2>/dev/null || skip "jj git init failed"
+  mk_jj_base_change main
+  jj new main
+  echo feature > feature.txt
+  bash "$VCS_OP" commit "feat: add feature" feature.txt
+
+  run bash "$VCS_OP" log-head
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"feat: add feature"* ]]
+}
+
+# ─── jj branch/push/fix-commit ops (skipped when jj isn't available) ───
+
+@test "jj: branch creates a new bookmark from base" {
+  command -v jj >/dev/null || skip "jj not installed"
+  jj git init 2>/dev/null || skip "jj git init failed"
+  mk_jj_base_change main
+
+  run bash "$VCS_OP" branch feat-test
+  [ "$status" -eq 0 ]
+
+  # The new bookmark should exist
+  run jj bookmark list -r @ -T 'name ++ "\n"'
+  [[ "$output" == *"feat-test"* ]]
+}
+
+@test "jj: push pushes the named bookmark to origin" {
+  command -v jj >/dev/null || skip "jj not installed"
+  jj git init 2>/dev/null || skip "jj git init failed"
+  mk_jj_base_change main
+  mk_jj_remote_fixture main
+
+  run bash "$VCS_OP" push main
+  [ "$status" -eq 0 ]
+}
+
+@test "jj: fix-commit commits given files and pushes" {
+  command -v jj >/dev/null || skip "jj not installed"
+  jj git init 2>/dev/null || skip "jj git init failed"
+  mk_jj_base_change main
+  mk_jj_remote_fixture main
+  bash "$VCS_OP" branch feat >/dev/null
+  echo fix > fix.txt
+
+  run bash "$VCS_OP" fix-commit "fix: something" fix.txt
+  [ "$status" -eq 0 ]
+
+  # @- is the fix commit
+  run jj log -r @- --no-graph -n 1 -T 'description.first_line()'
+  [[ "$output" == *"fix: something"* ]]
+}
+
+# ─── jj remote-url op (skipped when jj isn't available) ────────────────
+
+@test "jj: remote-url prints the origin URL" {
+  command -v jj >/dev/null || skip "jj not installed"
+  jj git init 2>/dev/null || skip "jj git init failed"
+  mk_jj_remote_fixture main
+
+  run bash "$VCS_OP" remote-url
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"$TEST_DIR/remote.git"* ]]
+}
+
+# ─── jj fetch op (skipped when jj isn't available) ─────────────────────
+
+@test "jj: fetch fetches from origin" {
+  command -v jj >/dev/null || skip "jj not installed"
+  jj git init 2>/dev/null || skip "jj git init failed"
+  mk_jj_base_change main
+  mk_jj_remote_fixture main
+
+  # fetch should succeed (idempotent — nothing new to fetch, but no error)
+  run bash "$VCS_OP" fetch
+  [ "$status" -eq 0 ]
 }
