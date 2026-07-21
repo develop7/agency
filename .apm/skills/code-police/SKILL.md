@@ -99,7 +99,7 @@ Sub-agent prompt:
 >
 > Read the "Reviewing principles" and "Rules" sections of `.apm/skills/code-police/SKILL.md` for the built-in rule set. Also read `.agency/code-police.md` if it exists — its rules are additions to the built-in list (separate rows in the table, project-chosen rule IDs).
 >
-> **Scope:** the current diff against the merge base — run `git diff origin/HEAD...HEAD` (or the appropriate base-branch ref if `origin/HEAD` is unset).
+> **Scope:** the current diff against the merge base. When running under `/do`, use the diff provided in the sub-agent prompt (obtained via `.../skills/do/scripts/vcs-op diff-range <base>`). For standalone invocation, use `.../skills/do/scripts/vcs-op diff-range <base>`.
 >
 > Produce a single table with **every rule** (built-in + project):
 >
@@ -123,7 +123,7 @@ Sub-agent prompt:
 >
 > Read the "Reviewing principles" section of `.apm/skills/code-police/SKILL.md` and apply them verbatim. This is **not** a style review — it is a logic review. Find places where the code lies to itself.
 >
-> **Scope:** the current diff against the merge base — run `git diff origin/HEAD...HEAD` (or the appropriate base-branch ref if `origin/HEAD` is unset).
+> **Scope:** the current diff against the merge base. When running under `/do`, use the diff provided in the sub-agent prompt. For standalone invocation, use `.../skills/do/scripts/vcs-op diff-range <base>`.
 >
 > Flag:
 >
@@ -145,7 +145,7 @@ Sub-agent prompt:
 
 **Skip if `--no-elegance` was passed.** Do not run this pass and do not invoke `/simplify`; report `Elegance | – | Skipped (--no-elegance)` in the summary. The caller asserted `/simplify` already ran over this tree, so a second run is redundant. Pass 1 and Pass 2 are unaffected.
 
-**Skip on tiny diffs.** Run `git diff origin/HEAD...HEAD --shortstat` (or the appropriate base-branch ref). If the diff is **under 10 lines**, skip this pass and report `Elegance | 0 | Skipped (tiny diff)` in the summary. The elegance pass's three-lens fan-out has overhead that's disproportionate to a few-line change; Pass 1 and Pass 2 still run. If the diff exceeds the threshold, proceed below.
+**Skip on tiny diffs.** Get the shortstat: use `.../skills/do/scripts/vcs-op diff-stat <base>`. If the diff is **under 10 lines**, skip this pass and report `Elegance | 0 | Skipped (tiny diff)` in the summary. The elegance pass's three-lens fan-out has overhead that's disproportionate to a few-line change; Pass 1 and Pass 2 still run. If the diff exceeds the threshold, proceed below.
 
 Review the changes for elegance and simplicity.
 

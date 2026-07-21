@@ -1,0 +1,30 @@
+# Dispatcher to the Nickel workflow entry point at scripts/cli.ncl.
+# Paths to workflow.ncl and .do-results.json live in cli.ncl itself, not here.
+#
+# Usage:
+#   nickel-cli cli
+#   nickel-cli cli_seed <from>
+#
+# We pipe the field-selection + arg-application as a single Nickel expression
+# via stdin rather than passing args positionally: `nickel eval --field X
+# file.ncl ARG` treats ARG as a second file to import and merge, not as a
+# function argument.
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+field="${1:?Usage: nickel-cli <cli|cli_seed> [args...]}"
+shift
+case "$field" in
+  cli)
+    printf '(import "%s/cli.ncl").%s\n' "$SCRIPT_DIR" "$field" \
+      | nickel eval --stdin-format nickel
+    ;;
+  cli_seed)
+    from="${1:-}"
+    printf '(import "%s/cli.ncl").%s "%s"\n' "$SCRIPT_DIR" "$field" "$from" \
+      | nickel eval --stdin-format nickel
+    ;;
+  *)
+    echo "nickel-cli: unknown field: $field" >&2
+    exit 2
+    ;;
+esac

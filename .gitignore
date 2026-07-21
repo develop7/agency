@@ -1,6 +1,25 @@
-.worktrees/
-.do-results.json
+# Exclude everything
+*
 
+# Except things we do care of
+!/.apm/
+!/.apm/**
+!/.agency/
+!/.agency/**
+!/docs/
+!/docs/**
+!/tests/
+!/tests/**
+!/website/
+!/website/**
+!/.github/
+!/.github/**
+!/apm.yml
+!/justfile
+!/flake.nix
+!/flake.lock
+!/LICENSE
+!/README.md
 
 # APM dependencies
 apm_modules/
