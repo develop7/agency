@@ -145,10 +145,10 @@ just apm-audit # security audit
 just apm-sync  # verify nothing drifted
 just test      # run bats tests (unit + integration)
 just lint      # run shellcheck on .apm/ bash scripts
-just ci        # full CI: tests + lint
+just ci        # full CI: env check + tests + lint
 ```
 
-Testing requires [bats-core](https://github.com/bats-core/bats-core): `sudo apt-get install bats`, `brew install bats-core`, or `nix profile install nixpkgs#bats`.
+The toolchain (bats, jq, jj, nickel, shellcheck, just, uv) is declared in [`flake.nix`](./flake.nix). `just` recipes auto-enter `nix develop` when not already inside a nix shell, so the same commands work locally and in CI. Prerequisites: [Nix](https://nixos.org/download/) with flakes enabled, and [just](https://github.com/casey/just).
 
 ## Resources
 

@@ -16,6 +16,8 @@
 !/.github/**
 !/apm.yml
 !/justfile
+!/flake.nix
+!/flake.lock
 !/LICENSE
 !/README.md
 

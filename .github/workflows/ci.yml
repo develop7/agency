@@ -12,11 +12,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v31
       - uses: extractions/setup-just@v2
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - run: pip install uv
       - run: just apm-sync
 
   test:
@@ -24,8 +21,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v31
       - uses: extractions/setup-just@v2
-      - run: sudo apt-get update && sudo apt-get install -y bats
       - run: just test
 
   lint:
@@ -33,5 +30,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v31
       - uses: extractions/setup-just@v2
       - run: just lint

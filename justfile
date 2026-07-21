@@ -1,15 +1,22 @@
 apm_cmd := "uvx --from 'git+https://github.com/microsoft/apm' apm"
 repo := justfile_directory()
 
+# Wrap recipes in `nix develop` when not already inside a nix shell, so
+# `just test` works identically inside and outside `nix develop`. Mirrors
+# website/mod.just's nix_shell idiom — the canonical harness for this repo.
+# --accept-flake-config: the root flake is untrusted on first run; carrying
+# this flag here means CI jobs and local runs can't forget it.
+nix_shell := if env('IN_NIX_SHELL', '') != '' { '' } else { 'nix develop ' + repo + ' --accept-flake-config -c' }
+
 mod website "website/mod.just"
 
 # Install apm dependencies and regenerate .claude/ from .apm/ sources
 apm:
-    {{ apm_cmd }} install
+    {{ nix_shell }} {{ apm_cmd }} install
 
 # Run apm security audit
 apm-audit:
-    {{ apm_cmd }} audit
+    {{ nix_shell }} {{ apm_cmd }} audit
 
 # Verify .claude/ stays in sync with .apm/ sources
 apm-sync: apm apm-audit
@@ -19,25 +26,35 @@ apm-sync: apm apm-audit
         exit 1; \
     fi
 
+# Fail loud if a tool the recipes need is missing from the devShell.
+# Converts silent test-skips (e.g. jj not on PATH → 22 jj tests skip)
+# into a CI failure. Run before test/lint in `just ci`.
+check-env:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    {{ nix_shell }} bash -c 'for t in bats jq jj nickel shellcheck just uv uvx; do
+        command -v "$t" >/dev/null || { echo "missing from devShell: $t" >&2; exit 1; }
+    done'
+
 # Run all bats tests (unit + integration)
 test:
-    REPO_ROOT={{ repo }} bats -r tests/
+    REPO_ROOT={{ repo }} {{ nix_shell }} bats -r tests/
 
 # Run unit tests only (black-box, no VCS fixtures)
 test-unit:
-    REPO_ROOT={{ repo }} bats -r tests/unit/
+    REPO_ROOT={{ repo }} {{ nix_shell }} bats -r tests/unit/
 
 # Run integration tests (real git fixtures)
 test-integration:
-    REPO_ROOT={{ repo }} bats -r tests/integration/
+    REPO_ROOT={{ repo }} {{ nix_shell }} bats -r tests/integration/
 
 # Run shellcheck on all .apm/ bash scripts
 # SC2148/SC1113/SC2096: scripts are intentionally shebang-less (run via `bash script`)
 # SC1091: scripts source lib/state.sh via a runtime $SCRIPT_DIR path shellcheck can't follow statically
 lint:
-    find .apm/scripts .apm/hooks/scripts .apm/skills/do/scripts tests/helpers \
+    {{ nix_shell }} find .apm/scripts .apm/hooks/scripts .apm/skills/do/scripts tests/helpers \
         -type f ! -name '*.ncl' \
         -exec shellcheck --shell=bash --exclude=SC2148,SC1113,SC2096,SC1091 {} +
 
-# Full CI: tests + lint
-ci: test lint
+# Full CI: env check + tests + lint
+ci: check-env test lint
