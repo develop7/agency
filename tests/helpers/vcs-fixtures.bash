@@ -32,7 +32,7 @@ mk_remote_fixture() {
 # error paths, remote-url before any commit).
 mk_jj_repo() {
   command -v jj >/dev/null || skip "jj not installed"
-  jj git init 2>/dev/null || skip "jj git init failed"
+  [ -d .jj ] || jj git init 2>/dev/null || skip "jj git init failed"
 }
 
 # Create a base change with a bookmark in the current jj repo. Calls
