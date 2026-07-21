@@ -7,7 +7,7 @@ repo := justfile_directory()
 # variables across modules, so the one-liner is duplicated).
 # --accept-flake-config: the root flake is untrusted on first run; carrying
 # this flag here means CI jobs and local runs can't forget it.
-nix_shell := if env('IN_NIX_SHELL', '') != '' { '' } else { 'nix develop ' + repo + ' --accept-flake-config -c' }
+nix_shell := if env('IN_NIX_SHELL', '') != '' { '' } else { 'nix develop "' + repo + '" --accept-flake-config -c' }
 
 mod website "website/mod.just"
 
