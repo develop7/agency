@@ -108,7 +108,7 @@ teardown() {
   mk_remote_fixture
 
   # base is read from .do-results.json (set by sync); branch takes only <name>.
-  echo '{"base":"master"}' > .do-results.json
+  seed_base master
   run bash "$VCS_OP" branch feat-test
   [ "$status" -eq 0 ]
 
@@ -203,7 +203,7 @@ teardown() {
   git commit -q -m "add file2"
 
   # base (master) is read from .do-results.json, not a positional arg.
-  echo '{"base":"master"}' > .do-results.json
+  seed_base master
   run bash "$VCS_OP" log-range
   [ "$status" -eq 0 ]
   [[ "$output" == *"add file2"* ]]
@@ -221,7 +221,7 @@ teardown() {
   git add file2.txt
   git commit -q -m "add file2"
 
-  echo '{"base":"master"}' > .do-results.json
+  seed_base master
   run bash "$VCS_OP" diff-names
   [ "$status" -eq 0 ]
   [[ "$output" == *"file2.txt"* ]]
@@ -231,7 +231,7 @@ teardown() {
 
 @test "base op prints the resolved base from .do-results.json" {
   mk_initial_commit
-  echo '{"base":"feat-x"}' > .do-results.json
+  seed_base feat-x
 
   run bash "$VCS_OP" base
   [ "$status" -eq 0 ]
@@ -283,6 +283,10 @@ teardown() {
 }
 
 # ─── jj arms (skipped when jj isn't available) ────────────────────────
+# mk_jj_repo and mk_jj_base_change fold the `command -v jj || skip` guard
+# in, so individual tests don't repeat it. Tests that need base state for
+# vcs-op ops call `seed_base <bookmark>` after mk_jj_base_change; tests
+# that don't (head-revision, current-branch, dirty) skip the seed.
 
 @test "jj: detect in jj colocated repo" {
   command -v jj >/dev/null || skip "jj not installed"
@@ -293,13 +297,11 @@ teardown() {
   [[ "$output" == "jj" ]]
 }
 
-# ─── jj commit arms (skipped when jj isn't available) ─────────────────
+# ─── jj commit arms ────────────────────────────────────────────────────
 
 @test "jj: commit with explicit files splits unrelated changes out" {
-  command -v jj >/dev/null || skip "jj not installed"
-  jj git init 2>/dev/null || skip "jj git init failed"
-
   mk_jj_base_change main
+  seed_base main
 
   # Working copy has feature files + an unrelated file
   jj new main
@@ -324,10 +326,8 @@ teardown() {
 }
 
 @test "jj: commit with all changed files makes a single commit (no split)" {
-  command -v jj >/dev/null || skip "jj not installed"
-  jj git init 2>/dev/null || skip "jj git init failed"
-
   mk_jj_base_change main
+  seed_base main
 
   jj new main
   echo feature > feature.txt
@@ -344,8 +344,7 @@ teardown() {
 }
 
 @test "jj: commit with no files errors" {
-  command -v jj >/dev/null || skip "jj not installed"
-  jj git init 2>/dev/null || skip "jj git init failed"
+  mk_jj_repo
 
   echo base > README.md
   jj describe -m "base"
@@ -359,8 +358,7 @@ teardown() {
 }
 
 @test "jj: commit with a non-dirty file errors" {
-  command -v jj >/dev/null || skip "jj not installed"
-  jj git init 2>/dev/null || skip "jj git init failed"
+  mk_jj_repo
 
   echo base > README.md
   jj describe -m "base"
@@ -375,10 +373,8 @@ teardown() {
 }
 
 @test "jj: commit accepts ./-prefixed paths (no false negative)" {
-  command -v jj >/dev/null || skip "jj not installed"
-  jj git init 2>/dev/null || skip "jj git init failed"
-
   mk_jj_base_change main
+  seed_base main
 
   jj new main
   echo feature > feature.txt
@@ -394,10 +390,8 @@ teardown() {
 }
 
 @test "jj: commit accepts absolute paths (no false negative)" {
-  command -v jj >/dev/null || skip "jj not installed"
-  jj git init 2>/dev/null || skip "jj git init failed"
-
   mk_jj_base_change main
+  seed_base main
 
   jj new main
   echo feature > feature.txt
@@ -411,10 +405,8 @@ teardown() {
 @test "jj: commit with ./-prefixed path is not misclassified as unrelated" {
   # Regression: before the fix, ./README.md != README.md in the set
   # subtraction, so the caller's own file was split into a chore commit (#13).
-  command -v jj >/dev/null || skip "jj not installed"
-  jj git init 2>/dev/null || skip "jj git init failed"
-
   mk_jj_base_change main
+  seed_base main
 
   jj new main
   echo feature > feature.txt
@@ -432,11 +424,9 @@ teardown() {
   [[ "$output" != *"README.md"* ]]
 }
 
-# ─── jj read-only ops (skipped when jj isn't available) ────────────────
+# ─── jj read-only ops ──────────────────────────────────────────────────
 
 @test "jj: dirty: exit 1 on clean tree" {
-  command -v jj >/dev/null || skip "jj not installed"
-  jj git init 2>/dev/null || skip "jj git init failed"
   mk_jj_base_change main
   jj new main
 
@@ -445,8 +435,6 @@ teardown() {
 }
 
 @test "jj: dirty: exit 0 on uncommitted changes" {
-  command -v jj >/dev/null || skip "jj not installed"
-  jj git init 2>/dev/null || skip "jj git init failed"
   mk_jj_base_change main
 
   echo "changed" > README.md
@@ -456,8 +444,6 @@ teardown() {
 }
 
 @test "jj: head-revision returns bookmark on @" {
-  command -v jj >/dev/null || skip "jj not installed"
-  jj git init 2>/dev/null || skip "jj git init failed"
   mk_jj_base_change main
 
   run bash "$VCS_OP" head-revision
@@ -466,8 +452,6 @@ teardown() {
 }
 
 @test "jj: head-revision returns change id when no bookmark on @" {
-  command -v jj >/dev/null || skip "jj not installed"
-  jj git init 2>/dev/null || skip "jj git init failed"
   mk_jj_base_change main
   jj new main
 
@@ -480,9 +464,8 @@ teardown() {
 }
 
 @test "jj: head-commit-sha returns SHA of @-" {
-  command -v jj >/dev/null || skip "jj not installed"
-  jj git init 2>/dev/null || skip "jj git init failed"
   mk_jj_base_change main
+  seed_base main
   jj new main
   echo feature > feature.txt
   bash "$VCS_OP" commit "feat: add feature" feature.txt
@@ -497,8 +480,6 @@ teardown() {
 }
 
 @test "jj: default-branch returns master when no remote bookmark exists" {
-  command -v jj >/dev/null || skip "jj not installed"
-  jj git init 2>/dev/null || skip "jj git init failed"
   mk_jj_base_change main
 
   run bash "$VCS_OP" default-branch
@@ -507,8 +488,6 @@ teardown() {
 }
 
 @test "jj: current-branch returns bookmark on @" {
-  command -v jj >/dev/null || skip "jj not installed"
-  jj git init 2>/dev/null || skip "jj git init failed"
   mk_jj_base_change main
 
   run bash "$VCS_OP" current-branch
@@ -517,8 +496,6 @@ teardown() {
 }
 
 @test "jj: current-branch falls back to bookmark on @-" {
-  command -v jj >/dev/null || skip "jj not installed"
-  jj git init 2>/dev/null || skip "jj git init failed"
   mk_jj_base_change main
   jj new main
 
@@ -529,9 +506,8 @@ teardown() {
 }
 
 @test "jj: base op prints the resolved base from .do-results.json" {
-  command -v jj >/dev/null || skip "jj not installed"
-  jj git init 2>/dev/null || skip "jj git init failed"
-  echo '{"base":"feat-x"}' > .do-results.json
+  mk_jj_repo
+  seed_base feat-x
 
   run bash "$VCS_OP" base
   [ "$status" -eq 0 ]
@@ -539,8 +515,7 @@ teardown() {
 }
 
 @test "jj: get_base_branch hard-errors when base is absent" {
-  command -v jj >/dev/null || skip "jj not installed"
-  jj git init 2>/dev/null || skip "jj git init failed"
+  mk_jj_repo
   echo '{}' > .do-results.json
 
   run bash "$VCS_OP" base
@@ -549,20 +524,22 @@ teardown() {
 }
 
 @test "jj: get_base_branch hard-errors when .do-results.json is missing" {
-  command -v jj >/dev/null || skip "jj not installed"
-  jj git init 2>/dev/null || skip "jj git init failed"
+  mk_jj_repo
 
   run bash "$VCS_OP" base
   [ "$status" -eq 1 ]
   [[ "$output" == *"base is not set"* ]]
 }
 
-# ─── jj diff/log ops (skipped when jj isn't available) ─────────────────
+# ─── jj diff/log ops ───────────────────────────────────────────────────
+# These create a feature branch before committing so the feature bookmark
+# (not main) moves during commit's move_bookmark_to_described_change.
+# Without this, main would move to the feature commit and diffs would be
+# empty (base == head).
 
 @test "jj: diff-names shows changed files" {
-  command -v jj >/dev/null || skip "jj not installed"
-  jj git init 2>/dev/null || skip "jj git init failed"
   mk_jj_base_change main
+  seed_base main
   bash "$VCS_OP" branch feat >/dev/null
   echo feature > feature.txt
   bash "$VCS_OP" commit "feat: add feature" feature.txt
@@ -573,9 +550,8 @@ teardown() {
 }
 
 @test "jj: diff-range shows the diff" {
-  command -v jj >/dev/null || skip "jj not installed"
-  jj git init 2>/dev/null || skip "jj git init failed"
   mk_jj_base_change main
+  seed_base main
   bash "$VCS_OP" branch feat >/dev/null
   echo feature > feature.txt
   bash "$VCS_OP" commit "feat: add feature" feature.txt
@@ -586,9 +562,8 @@ teardown() {
 }
 
 @test "jj: diff-stat shows summary" {
-  command -v jj >/dev/null || skip "jj not installed"
-  jj git init 2>/dev/null || skip "jj git init failed"
   mk_jj_base_change main
+  seed_base main
   bash "$VCS_OP" branch feat >/dev/null
   echo feature > feature.txt
   bash "$VCS_OP" commit "feat: add feature" feature.txt
@@ -599,9 +574,8 @@ teardown() {
 }
 
 @test "jj: new-files lists added files" {
-  command -v jj >/dev/null || skip "jj not installed"
-  jj git init 2>/dev/null || skip "jj git init failed"
   mk_jj_base_change main
+  seed_base main
   bash "$VCS_OP" branch feat >/dev/null
   echo feature > feature.txt
   bash "$VCS_OP" commit "feat: add feature" feature.txt
@@ -612,9 +586,8 @@ teardown() {
 }
 
 @test "jj: log-range shows commits between base and HEAD" {
-  command -v jj >/dev/null || skip "jj not installed"
-  jj git init 2>/dev/null || skip "jj git init failed"
   mk_jj_base_change main
+  seed_base main
   bash "$VCS_OP" branch feat >/dev/null
   echo feature > feature.txt
   bash "$VCS_OP" commit "feat: add feature" feature.txt
@@ -625,8 +598,6 @@ teardown() {
 }
 
 @test "jj: log-head returns one-line log of @-" {
-  command -v jj >/dev/null || skip "jj not installed"
-  jj git init 2>/dev/null || skip "jj git init failed"
   mk_jj_base_change main
   jj new main
   echo feature > feature.txt
@@ -637,12 +608,11 @@ teardown() {
   [[ "$output" == *"feat: add feature"* ]]
 }
 
-# ─── jj branch/push/fix-commit ops (skipped when jj isn't available) ───
+# ─── jj branch/push/fix-commit ops ─────────────────────────────────────
 
 @test "jj: branch creates a new bookmark from base" {
-  command -v jj >/dev/null || skip "jj not installed"
-  jj git init 2>/dev/null || skip "jj git init failed"
   mk_jj_base_change main
+  seed_base main
 
   run bash "$VCS_OP" branch feat-test
   [ "$status" -eq 0 ]
@@ -653,8 +623,6 @@ teardown() {
 }
 
 @test "jj: push pushes the named bookmark to origin" {
-  command -v jj >/dev/null || skip "jj not installed"
-  jj git init 2>/dev/null || skip "jj git init failed"
   mk_jj_base_change main
   mk_jj_remote_fixture main
 
@@ -663,9 +631,8 @@ teardown() {
 }
 
 @test "jj: fix-commit commits given files and pushes" {
-  command -v jj >/dev/null || skip "jj not installed"
-  jj git init 2>/dev/null || skip "jj git init failed"
   mk_jj_base_change main
+  seed_base main
   mk_jj_remote_fixture main
   bash "$VCS_OP" branch feat >/dev/null
   echo fix > fix.txt
@@ -678,11 +645,10 @@ teardown() {
   [[ "$output" == *"fix: something"* ]]
 }
 
-# ─── jj remote-url op (skipped when jj isn't available) ────────────────
+# ─── jj remote-url op ──────────────────────────────────────────────────
 
 @test "jj: remote-url prints the origin URL" {
-  command -v jj >/dev/null || skip "jj not installed"
-  jj git init 2>/dev/null || skip "jj git init failed"
+  mk_jj_repo
   mk_jj_remote_fixture main
 
   run bash "$VCS_OP" remote-url
@@ -690,11 +656,9 @@ teardown() {
   [[ "$output" == *"$TEST_DIR/remote.git"* ]]
 }
 
-# ─── jj fetch op (skipped when jj isn't available) ─────────────────────
+# ─── jj fetch op ───────────────────────────────────────────────────────
 
 @test "jj: fetch fetches from origin" {
-  command -v jj >/dev/null || skip "jj not installed"
-  jj git init 2>/dev/null || skip "jj git init failed"
   mk_jj_base_change main
   mk_jj_remote_fixture main
 
