@@ -537,12 +537,20 @@ teardown() {
 # Without this, main would move to the feature commit and diffs would be
 # empty (base == head).
 
-@test "jj: diff-names shows changed files" {
+# Local scaffolding for diff/log/fix-commit tests: set up a base, create
+# a feature branch, write one file, commit it. Parameterized by filename
+# and commit message so fix-commit can reuse it with fix.txt/"fix: …".
+mk_jj_feature_change() {
+  local file="${1:-feature.txt}" msg="${2:-feat: add feature}"
   mk_jj_base_change main
   seed_base main
   bash "$VCS_OP" branch feat >/dev/null
-  echo feature > feature.txt
-  bash "$VCS_OP" commit "feat: add feature" feature.txt
+  echo "${file%%.*}" > "$file"
+  bash "$VCS_OP" commit "$msg" "$file"
+}
+
+@test "jj: diff-names shows changed files" {
+  mk_jj_feature_change
 
   run bash "$VCS_OP" diff-names
   [ "$status" -eq 0 ]
@@ -550,11 +558,7 @@ teardown() {
 }
 
 @test "jj: diff-range shows the diff" {
-  mk_jj_base_change main
-  seed_base main
-  bash "$VCS_OP" branch feat >/dev/null
-  echo feature > feature.txt
-  bash "$VCS_OP" commit "feat: add feature" feature.txt
+  mk_jj_feature_change
 
   run bash "$VCS_OP" diff-range
   [ "$status" -eq 0 ]
@@ -562,11 +566,7 @@ teardown() {
 }
 
 @test "jj: diff-stat shows summary" {
-  mk_jj_base_change main
-  seed_base main
-  bash "$VCS_OP" branch feat >/dev/null
-  echo feature > feature.txt
-  bash "$VCS_OP" commit "feat: add feature" feature.txt
+  mk_jj_feature_change
 
   run bash "$VCS_OP" diff-stat
   [ "$status" -eq 0 ]
@@ -574,11 +574,7 @@ teardown() {
 }
 
 @test "jj: new-files lists added files" {
-  mk_jj_base_change main
-  seed_base main
-  bash "$VCS_OP" branch feat >/dev/null
-  echo feature > feature.txt
-  bash "$VCS_OP" commit "feat: add feature" feature.txt
+  mk_jj_feature_change
 
   run bash "$VCS_OP" new-files
   [ "$status" -eq 0 ]
@@ -586,11 +582,7 @@ teardown() {
 }
 
 @test "jj: log-range shows commits between base and HEAD" {
-  mk_jj_base_change main
-  seed_base main
-  bash "$VCS_OP" branch feat >/dev/null
-  echo feature > feature.txt
-  bash "$VCS_OP" commit "feat: add feature" feature.txt
+  mk_jj_feature_change
 
   run bash "$VCS_OP" log-range
   [ "$status" -eq 0 ]
