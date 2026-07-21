@@ -4,6 +4,7 @@
 
 setup() {
   load "$REPO_ROOT/tests/helpers/setup.bash"
+  load "$REPO_ROOT/tests/helpers/vcs-fixtures.bash"
   setup_test_dir
 
   SYNC="$(apm_script skills/do/scripts/steps/sync)"
@@ -31,6 +32,15 @@ teardown() {
 run_sync() {
   run bash "$SYNC" "$@"
 }
+
+# op-name → .do-results.json field name. Declared once; both supportsX
+# tests iterate it. Mirrors the mapping in sync:139-142 (the production
+# writer); if sync adds/removes an op, this list is the single test-side
+# edit. forge-op's OPS vocabulary (forge-op:69) is the upstream authority.
+SUPPORTS_FIELDS=("pr-create:supportsPrCreate" \
+                 "pr-comment:supportsPrComment" \
+                 "issue-view:supportsIssueView" \
+                 "pr-checks:supportsPrChecks")
 
 @test "sync with noVcs=true: emits correct protocol lines" {
   run_sync true
@@ -147,11 +157,7 @@ run_sync() {
   [ "$detected_forge" = "github" ]
 
   # For each op, assert sync wrote what forge-op's table says for this forge.
-  # Map op-name → state field name.
-  for entry in "pr-create:supportsPrCreate" \
-               "pr-comment:supportsPrComment" \
-               "issue-view:supportsIssueView" \
-               "pr-checks:supportsPrChecks"; do
+  for entry in "${SUPPORTS_FIELDS[@]}"; do
     local op="${entry%%:*}"
     local field="${entry##*:}"
     local expected actual
@@ -173,10 +179,10 @@ run_sync() {
   run_sync true
   [ "$status" -eq 0 ]
 
-  [ "$(jq -r '.supportsPrCreate' .do-results.json)" = "false" ]
-  [ "$(jq -r '.supportsPrComment' .do-results.json)" = "false" ]
-  [ "$(jq -r '.supportsIssueView' .do-results.json)" = "false" ]
-  [ "$(jq -r '.supportsPrChecks' .do-results.json)" = "false" ]
+  for entry in "${SUPPORTS_FIELDS[@]}"; do
+    local field="${entry##*:}"
+    [ "$(jq -r ".$field" .do-results.json)" = "false" ]
+  done
 }
 
 # ─── jj arm (skipped when jj isn't available) ───────────────────────────
@@ -192,12 +198,8 @@ run_sync() {
   git config user.name "Test"
 
   # Create a base change + remote so sync has something to fetch.
-  echo "hello" > file.txt
-  jj describe -m "initial"
-  jj bookmark create main -r @
-  git init -q --bare "$TEST_DIR/remote.git"
-  jj git remote add origin "$TEST_DIR/remote.git" 2>/dev/null
-  jj git push --bookmark main 2>/dev/null
+  mk_jj_base_change main "initial"
+  mk_jj_remote_fixture main
 
   run_sync true
   [ "$status" -eq 0 ]
