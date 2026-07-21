@@ -4,9 +4,11 @@
 
 setup() {
   load "$REPO_ROOT/tests/helpers/setup.bash"
+  load "$REPO_ROOT/tests/helpers/vcs-fixtures.bash"
   setup_test_dir
 
   SYNC="$(apm_script skills/do/scripts/steps/sync)"
+  FORGE_OP="$(apm_script skills/do/scripts/forge-op)"
 
   # Create a git fixture with a working local remote
   git init -q
@@ -30,6 +32,15 @@ teardown() {
 run_sync() {
   run bash "$SYNC" "$@"
 }
+
+# op-name → .do-results.json field name. Declared once; both supportsX
+# tests iterate it. Mirrors the mapping in sync:139-142 (the production
+# writer); if sync adds/removes an op, this list is the single test-side
+# edit. forge-op's OPS vocabulary (forge-op:69) is the upstream authority.
+SUPPORTS_FIELDS=("pr-create:supportsPrCreate" \
+                 "pr-comment:supportsPrComment" \
+                 "issue-view:supportsIssueView" \
+                 "pr-checks:supportsPrChecks")
 
 @test "sync with noVcs=true: emits correct protocol lines" {
   run_sync true
@@ -122,4 +133,76 @@ run_sync() {
   run_sync --base foo true
   [ "$status" -eq 2 ]
   [[ "$output" == *"incompatible with --no-vcs"* ]]
+}
+
+# ─── supportsX round-trip (sync → forge-op supports → .do-results.json) ─
+# Join test: sync writes supportsX booleans consistent with forge-op's
+# capability table for the detected forge. Uses relationship-based
+# assertions (queries forge-op supports for the expected value) rather
+# than hardcoded values, so forge-op stays the sole table authority —
+# flipping a capability in forge-op's table doesn't break this test.
+
+@test "sync writes supportsX booleans consistent with forge-op's table (github)" {
+  # Use a local bare repo whose path contains "github.com" so forge
+  # detection classifies as github (all ops supported).
+  git init -q --bare "$TEST_DIR/github.com-fake.git"
+  git push -q "$TEST_DIR/github.com-fake.git" master 2>/dev/null
+  git remote set-url origin "$TEST_DIR/github.com-fake.git"
+
+  run_sync true
+  [ "$status" -eq 0 ]
+
+  local detected_forge
+  detected_forge="$(jq -r '.forge' .do-results.json)"
+  [ "$detected_forge" = "github" ]
+
+  # For each op, assert sync wrote what forge-op's table says for this forge.
+  for entry in "${SUPPORTS_FIELDS[@]}"; do
+    local op="${entry%%:*}"
+    local field="${entry##*:}"
+    local expected actual
+
+    if FORGE_OVERRIDE="$detected_forge" bash "$FORGE_OP" supports "$op" 2>/dev/null; then
+      expected=true
+    else
+      expected=false
+    fi
+    actual="$(jq -r ".$field" .do-results.json)"
+    [ "$actual" = "$expected" ] || \
+      { echo "sync wrote $field=$actual but forge-op says $expected for forge=$detected_forge"; false; }
+  done
+}
+
+@test "sync writes supportsX=false for all ops on unknown forge" {
+  # The default fixture uses a local bare remote (no github.com/bitbucket in URL)
+  # → forge=unknown → all supportsX should be false.
+  run_sync true
+  [ "$status" -eq 0 ]
+
+  for entry in "${SUPPORTS_FIELDS[@]}"; do
+    local field="${entry##*:}"
+    [ "$(jq -r ".$field" .do-results.json)" = "false" ]
+  done
+}
+
+# ─── jj arm (skipped when jj isn't available) ───────────────────────────
+
+@test "jj: sync detects jj and emits vcs=jj" {
+  command -v jj >/dev/null || skip "jj not installed"
+
+  # Replace the git fixture with a jj colocated repo. Remove the git-only
+  # setup artifacts (origin remote, .git) and re-init as jj.
+  rm -rf .git "$TEST_DIR/remote.git"
+  jj git init --colocate 2>/dev/null || skip "jj git init failed"
+  git config user.email "test@test.com"
+  git config user.name "Test"
+
+  # Create a base change + remote so sync has something to fetch.
+  mk_jj_base_change main "initial"
+  mk_jj_remote_fixture main
+
+  run_sync true
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"vcs=jj"* ]]
+  [[ "$output" == *"forge=unknown"* ]]
 }
