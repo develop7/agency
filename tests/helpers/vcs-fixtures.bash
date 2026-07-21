@@ -13,7 +13,9 @@ mk_initial_commit() {
 }
 
 # Create a bare remote at $TEST_DIR/remote.git, point origin at it,
-# push the current branch, and pin origin/HEAD.
+# push the current branch, and pin origin/HEAD. push/set-head stderr is
+# swallowed because the bare remote may already have the ref (re-runs in
+# the same TEST_DIR) — best-effort, not a correctness signal.
 mk_remote_fixture() {
   git init -q --bare "$TEST_DIR/remote.git"
   git remote set-url origin "$TEST_DIR/remote.git"
@@ -50,7 +52,9 @@ mk_jj_base_change() {
 # Create a bare remote at $TEST_DIR/remote.git, point origin at it, and
 # push the named bookmark. jj has no origin/HEAD concept, so no head-pinning.
 # The `add || set-url` fallback handles the case where jj inherited origin
-# from an existing git repo (colocated init).
+# from an existing git repo (colocated init). Push stderr is swallowed
+# because the bare remote may already have the bookmark (re-runs in the
+# same TEST_DIR) — best-effort, not a correctness signal.
 mk_jj_remote_fixture() {
   local bookmark="${1:-main}"
   git init -q --bare "$TEST_DIR/remote.git"
@@ -63,8 +67,10 @@ mk_jj_remote_fixture() {
 
 # Write `.do-results.json` with the given base value. The single source
 # of the test base-state shape — if state_get's schema changes, one edit
-# here, not five hand-rolled `echo '{"base":…}'` sites. Pass "" to seed
-# an absent base (for error-path tests).
+# here, not five hand-rolled `echo '{"base":…}'` sites. Writes
+# {"base":"<value>"}; for the "base field absent" error path, call
+# `echo '{}' > .do-results.json` directly (seed_base cannot produce
+# that shape — it always sets the field).
 seed_base() {
   echo "{\"base\":\"$1\"}" > .do-results.json
 }
