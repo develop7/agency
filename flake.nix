@@ -7,7 +7,6 @@
     let
       # Duplicated in website/flake.nix — intentional: two flakes track
       # different subsystem release cadences (Astro/pnpm vs bats/jj/nickel).
-      # If platform support changes, edit both.
       systems = [ "x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin" ];
       forAllSystems = nixpkgs.lib.genAttrs systems;
       pkgsFor = system: import nixpkgs { inherit system; };
@@ -17,6 +16,9 @@
         let pkgs = pkgsFor system; in
         {
           default = pkgs.mkShell {
+            # Binaries consumed by recipes: bats, jq, jj (from jujutsu),
+            # nickel, shellcheck, just, uv + uvx (uvx is a uv subcommand).
+            # Kept in sync with the check-env recipe in justfile.
             packages = [
               pkgs.bats
               pkgs.jq
