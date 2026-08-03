@@ -6,7 +6,7 @@
 setup() {
   load "$REPO_ROOT/tests/helpers/setup.bash"
   setup_test_dir
-  LINT="$(apm_script scripts/lint-vcs-refs.sh)"
+  LINT="$(repo_script scripts/lint-vcs-refs.sh)"
 
   # Build a fixture skills tree mirroring the real layout
   FIXTURE_SKILLS="$TEST_DIR/fixtures/skills"

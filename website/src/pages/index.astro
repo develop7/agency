@@ -5,8 +5,7 @@ import Skill from "../components/Skill.astro";
 import SkillHue from "../components/SkillHue.astro";
 import PairMarker from "../components/PairMarker.astro";
 
-const setupPrompt = `Set up this repo to use srid/agency by following the instructions at
-https://github.com/srid/agency/blob/master/docs/agency-setup.md`;
+const setupPrompt = `omp plugin marketplace add srid/agency && omp plugin install agency@agency`;
 
 const year = new Date().getFullYear();
 ---
@@ -193,7 +192,7 @@ const year = new Date().getFullYear();
     <div class="body body--lede">
       <p>
         Drop a <code>.agency/&lt;skill&gt;.md</code> file at the repo root and
-        the matching skill picks it up — plain Markdown, opt-in, no APM
+        the matching skill picks it up — plain Markdown, opt-in, no
         ceremony. Adopt skills à la carte; layer your own rules on top of the
         built-ins.
       </p>

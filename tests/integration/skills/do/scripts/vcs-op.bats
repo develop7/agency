@@ -8,7 +8,7 @@ setup() {
   load "$REPO_ROOT/tests/helpers/git-fixtures.bash"
   setup_test_dir
 
-  VCS_OP="$(apm_script skills/do/scripts/vcs-op)"
+  VCS_OP="$(repo_script skills/do/scripts/vcs-op)"
 
   # Create a real git fixture repo
   git init -q

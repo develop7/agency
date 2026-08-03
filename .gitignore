@@ -2,8 +2,16 @@
 *
 
 # Except things we do care of
-!/.apm/
-!/.apm/**
+!/skills/
+!/skills/**
+!/agents/
+!/agents/**
+!/scripts/
+!/scripts/**
+!/src/
+!/src/**
+!/.omp-plugin/
+!/.omp-plugin/**
 !/.agency/
 !/.agency/**
 !/docs/
@@ -14,10 +22,7 @@
 !/website/**
 !/.github/
 !/.github/**
-!/apm.yml
+!/package.json
 !/justfile
 !/LICENSE
 !/README.md
-
-# APM dependencies
-apm_modules/

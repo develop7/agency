@@ -6,14 +6,14 @@ interface Props {
 const { text, id = "agency-paste" } = Astro.props;
 ---
 
-<div class="terminal" role="figure" aria-label="Claude Code session preview">
+<div class="terminal" role="figure" aria-label="OMP session preview">
   <header class="terminal-bar">
     <span class="terminal-dots" aria-hidden="true">
       <span class="terminal-dot terminal-dot--r"></span>
       <span class="terminal-dot terminal-dot--y"></span>
       <span class="terminal-dot terminal-dot--g"></span>
     </span>
-    <span class="terminal-title" aria-hidden="true">claude</span>
+    <span class="terminal-title" aria-hidden="true">omp</span>
     <button
       type="button"
       class="terminal-copy"
@@ -30,13 +30,13 @@ const { text, id = "agency-paste" } = Astro.props;
 
     <div class="terminal-out" aria-hidden="true">
       <p class="terminal-line">
-        <span class="terminal-glyph">✻</span> Reading <code>agency-setup.md</code>…
+        <span class="terminal-glyph">✻</span> Installing <code>agency@agency</code>…
       </p>
       <p class="terminal-line">
-        <span class="terminal-glyph">✻</span> Running <code>apm install</code>…
+        <span class="terminal-glyph">✻</span> Loading skills: <code>talk</code>, <code>do</code>, <code>hickey</code>, <code>lowy</code>…
       </p>
       <p class="terminal-line">
-        <span class="terminal-glyph">✻</span> Drafting <code>.agency/do.md</code> from your scripts<span class="terminal-cursor"></span>
+        <span class="terminal-glyph">✻</span> Ready. Try <code>/do &lt;task&gt;</code><span class="terminal-cursor"></span>
       </p>
     </div>
   </div>
@@ -69,7 +69,7 @@ const { text, id = "agency-paste" } = Astro.props;
 </script>
 
 <style>
-  /* Terminal — fake Claude Code session as the hero CTA. macOS-style title
+  /* Terminal — fake OMP session as the hero CTA. macOS-style title
      bar with traffic-light dots, the user's paste prompt prefixed with `>`,
      and three simulated `✻` progress lines (matching what the agent
      actually does on agency-setup) ending with a blinking cursor. */

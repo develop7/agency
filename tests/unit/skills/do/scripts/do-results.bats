@@ -5,7 +5,7 @@
 setup() {
   load "$REPO_ROOT/tests/helpers/setup.bash"
   setup_test_dir
-  DO_RESULTS="$(apm_script skills/do/scripts/do-results)"
+  DO_RESULTS="$(repo_script skills/do/scripts/do-results)"
 }
 
 teardown() {
