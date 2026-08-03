@@ -1,26 +1,33 @@
-# Dispatcher to the Nickel workflow entry point at scripts/cli.ncl.
-# Paths to workflow.ncl and .do-results.json live in cli.ncl itself, not here.
+# Dispatcher to the Nickel workflow engine.
+#
+# Constructs a Nickel expression inline with absolute paths so the workflow
+# works regardless of where the skill is installed (repo root, OMP plugin
+# directory, etc.). Nickel's `import` requires a string literal — no dynamic
+# interpolation — so we build the full expression in bash where $SCRIPT_DIR
+# (plugin/skill location) and $PWD (project root) are both available.
 #
 # Usage:
 #   nickel-cli cli
 #   nickel-cli cli_seed <from>
-#
-# We pipe the field-selection + arg-application as a single Nickel expression
-# via stdin rather than passing args positionally: `nickel eval --field X
-# file.ncl ARG` treats ARG as a second file to import and merge, not as a
-# function argument.
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+WORKFLOW="$SCRIPT_DIR/../workflow.ncl"
 field="${1:?Usage: nickel-cli <cli|cli_seed> [args...]}"
 shift
 case "$field" in
   cli)
-    printf '(import "%s/cli.ncl").%s\n' "$SCRIPT_DIR" "$field" \
+    printf 'let workflow = import "%s" in
+  let state = workflow.normalize_state (import "%s/.do-results.json") in
+  workflow.cli state
+' "$WORKFLOW" "$PWD" \
       | nickel eval --stdin-format nickel
     ;;
   cli_seed)
     from="${1:-}"
-    printf '(import "%s/cli.ncl").%s "%s"\n' "$SCRIPT_DIR" "$field" "$from" \
+    printf 'let workflow = import "%s" in
+  let state = workflow.normalize_state (import "%s/.do-results.json") in
+  workflow.cli_seed "%s" state
+' "$WORKFLOW" "$PWD" "$from" \
       | nickel eval --stdin-format nickel
     ;;
   *)
