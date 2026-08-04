@@ -77,6 +77,10 @@
         minimal | Bool,
         review | Bool | default = false,
         has_evidence | Bool | default = false,
+        # Entry point ID (e.g. "followup", "polish") set by `do-driver init --from`.
+        # Read by compute_next when steps is empty to start at the entry point
+        # instead of always defaulting to "sync". Empty or "default" → "sync".
+        from | String | default = "",
         task | String | default = "",
         active | String | default = "idle",
         status | std.enum.TagOrString | default = 'idle,
@@ -346,7 +350,7 @@
     if last_step.status == 'failed then
       "done"
     else if last_step.name == "" then
-      "sync"
+      resolve_entry state.from
     else
       get_next last_step.name state,
 
@@ -379,10 +383,10 @@
     = fun from =>
       if from == "" || from == null then
         EntryPoints.default
+      else if std.record.has_field from EntryPoints then
+        EntryPoints."%{from}"
       else
-        let ep = EntryPoints."%{from}" in
-        if ep == null then EntryPoints.default else ep,
-
+        EntryPoints.default,
   # Seed the step list for todo UI given a --from entry point and state.
   # Returns: [{ name, initial_status }]
   #   initial_status: 'completed for pre-steps, 'pending for the rest
@@ -431,9 +435,8 @@
     ```nickel multiline
     cli _test_state
     # => { step = "sync", skip = false, pattern = 'one-shot, instructions = "nodes/sync.md", requires = [], pattern_config = {} }
-
-    cli { active = true, status = 'running, steps = [{ name = "sync", status = 'passed }], noVcs = false, minimal = false, review = false, forge = 'github, has_evidence = false, task = "test" }
-    # => { step = "research", skip = false, pattern = 'one-shot, instructions = "nodes/research.md", requires = ["forge"], pattern_config = {} }
+    cli { active = true, status = 'running, steps = [], noVcs = false, minimal = false, review = false, forge = 'github, has_evidence = false, from = "polish", task = "test" }
+    # => { step = "hickey-lowy", skip = false, pattern = 'fanout-fix, instructions = "nodes/hickey-lowy.md", requires = ["diff", "research.context"], pattern_config = { cross_validate = true } }
     ```
   "%
     = fun state =>
