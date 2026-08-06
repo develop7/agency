@@ -1,293 +1,63 @@
 # Agency Setup
 
-Configure (or refresh) this repo to use [srid/agency](https://github.com/srid/agency). This is a plain Markdown guide, not an APM skill, so installing agency does not add a one-off setup skill to downstream repos. Each step below is **idempotent** — it inspects what's already on disk and acts only on what's missing or out of date. The guide works equally well as first-time bootstrap, full refresh, or **partial-install upgrade** (e.g. user already added `srid/agency` to `apm.yml` manually but never created `.agency/do.md` — the guide detects the gap and fills it without re-doing the parts that already exist).
+Agency is an [OMP (Oh My Pi)](https://github.com/can1357/oh-my-pi) marketplace plugin. Setup is two commands.
 
-When the repo already has `srid/agency` in `apm.yml`, this guide also refreshes it to the latest ref (via `apm deps update -t <subset> srid/agency` in step 8) — there's no separate "update" mode.
+## Install
 
-Don't commit anything — leave changes staged for the user to review.
+```bash
+omp plugin marketplace add srid/agency
+omp plugin install agency@agency
+```
 
-## Invariant: `apm install` and `apm compile` run *after* every file change
+This installs:
+- **Skills** (`talk`, `do`, `hickey`, `lowy`, `code-police`, `fact-check`, `elegance`, `ralph`, `forge-pr`) — discovered from the plugin's `skills/` directory
+- **Agents** (`hickey`, `lowy`) — discovered from the plugin's `agents/` directory, available as `task` tool agent types
+- **Extension** (`stop-guard`) — a `session_stop` handler that prevents the agent from stopping mid-`/do` workflow
 
-`apm install -t <subset>` regenerates the host folders (`.claude/`, `.opencode/`, `.codex/`) from `apm.yml` plus the contents of `.apm/`, and `apm compile -t <subset>` produces the project-root `AGENTS.md` for Codex / opencode from the same inputs. **Any** change to `apm.yml` or anything under `.apm/` invalidates both outputs. So this guide makes all file changes first (steps 1–7) and runs `apm install` (and `apm compile` where needed) exactly once at the end (step 8). Don't run install or compile partway through — later steps may add or modify files that must land in the same regeneration. If you ever edit `apm.yml` or `.apm/*` outside the prescribed order, you must re-run both before reporting back.
+For local development:
 
-## 1. Pick an `apm` invocation
+```bash
+omp plugin link ./path/to/agency
+```
 
-`apm` does not need to be installed — run it through `uvx`. Try in order, stopping at the first that works:
+## Configure model tiers
 
-1. `uvx --from apm-cli apm --version`
-2. `nix shell nixpkgs#uv -c uvx --from apm-cli apm --version`
-
-If neither works (no `uvx` and no `nix`), tell the user to install one of [`uv`](https://docs.astral.sh/uv/) or [`nix`](https://nixos.asia/en/install) and stop. Don't try to install package managers yourself.
-
-Use whichever prefix succeeded as the `apm` invocation for every subsequent `apm` call in this run (e.g., `uvx --from apm-cli apm install -t claude`).
-
-## 2. Detect the host targets
-
-The host targets go into `apm.yml` (next step) and are also passed to `apm install -t <subset>` and `apm compile -t <subset>` in step 8. Detect from what's already on disk and the host you're running in:
-
-- `.claude/` exists, or you're running in Claude Code → `claude`
-- `.opencode/` exists, or you're running in opencode → `opencode`
-- `.codex/` exists, or you're running in Codex → `codex`
-
-Multiple matches are fine — declare all of them. If nothing matches and the host you're in isn't one of the three, use `AskUserQuestion` to confirm. Do **not** guess silently — installing for the wrong target wastes a round trip.
-
-**Single vs. multiple targets:** `apm` has a bug where the plural `targets:` list breaks when only one entry is present. Use the singular `target: <name>` scalar for exactly one target, and the `targets:` list only when you have two or more.
-
-### Detect the VCS type
-
-The `/do` workflow adapts its git operations to the active VCS. Detect from the repo root:
-
-- `.jj/` exists → `jj` (Jujutsu). Prefer jj over git — even when both `.jj/` and `.git/` are present (jj repos are always git-backed).
-- `.jj/` does not exist, but `.git/` does → `git`.
-- Neither exists → not a versioned repo. Bail out: tell the user to run `jj git init` or `git init` first, then restart the setup.
-
-The VCS type determines which tool runs fetch, push, branch creation, commit, and diff operations throughout the workflow. No configuration file declares it — detection is purely filesystem-based.
-
-## 3. Create or extend `apm.yml`
-
-Before editing, note whether `srid/agency` is already listed under `dependencies.apm:` — steps 6 and 8 both need that fact (step 6 skips on first-time setup; step 8 decides whether to refresh the dep).
-
-If `apm.yml` does not exist, write:
+Agency's sub-agents use the `@task` model role. Set it in your OMP config:
 
 ```yaml
-name: <repo-directory-name>
-version: 1.0.0
-type: hybrid
-
-target: <detected-target>
-
-dependencies:
-  apm:
-    - srid/agency#master
+# ~/.omp/agent/config.yml
+modelRoles:
+  task: anthropic/claude-sonnet-4-5
 ```
 
-(If you detected two or more hosts, use the `targets:` list form instead — see the note in step 2.)
+Service tiers for sub-agents are controlled by `tier.subagent` (default: `inherit`):
 
-If `apm.yml` already exists, edit it idempotently:
-
-- If `dependencies.apm:` is missing the `srid/agency` entry, append `srid/agency#master`. Preserve every existing entry. If the `dependencies.apm:` block itself is missing, add it.
-- If neither `target:` nor `targets:` includes the detected host, add it. Don't remove existing targets. When adding a host pushes the count from one to two, convert `target: <name>` into a `targets:` list with both entries; when removing a host (not something this guide does, but worth knowing) drops the count back to one, convert the list back to the scalar form.
-
-Don't touch unrelated entries. Refreshing an existing `srid/agency` pin is handled by `apm deps update` in step 8 — don't hand-edit the ref here.
-
-### Layer on companion skill packs and MCP servers
-
-`srid/agency` ships the core agentic workflow. A few community packages — skill packs that add more skills, and an MCP-server launcher for browser-driven evidence — are commonly layered on top. Offer the user the relevant ones for *this* project before moving on. Skipping is the safe default; don't add anything the user didn't confirm.
-
-- [`juspay/skills`](https://github.com/juspay/skills) — Nix-centric and language-specific skills. Each is installed by a virtual-subdirectory reference (`juspay/skills/skills/<name>`); pick only what applies.
-- [`anthropics/skills/skills/frontend-design`](https://github.com/anthropics/skills/tree/main/skills/frontend-design) — Anthropic's skill for distinctive, production-grade frontend UI work.
-- [`juspay/nix-chrome-devtools-mcp`](https://github.com/juspay/nix-chrome-devtools-mcp) — Nix-based launcher that wires the [Chrome DevTools MCP](https://github.com/ChromeDevTools/chrome-devtools-mcp) into Claude Code / Codex / opencode. Lets the agent drive a real browser for `/do`'s evidence step (UI screenshots) and ad-hoc frontend debugging. Requires Nix with flakes enabled.
-
-Inspect the project to identify plausible candidates. Suggested detection cues (non-exhaustive — browse [`juspay/skills`](https://github.com/juspay/skills) for the current full list, since new skills land there over time):
-
-- `flake.nix` → `juspay/skills/skills/nix-for-dev`
-- `justfile` in a Nix project → `juspay/skills/skills/nix-justfile`
-- `*.cabal` / `cabal.project` → `juspay/skills/skills/nix-haskell`
-- `package.json` + `pnpm-lock.yaml` in a Nix project → `juspay/skills/skills/nix-typescript`
-- `Cargo.toml` → `juspay/skills/skills/cargo-watch`
-- `Cargo.toml` + Trunk/Leptos → `juspay/skills/skills/nix-rust-leptos`
-- `playwright.config.*` / a Playwright e2e suite → `juspay/skills/skills/nix-playwright`
-- `.github/workflows/` in a Nix project → `juspay/skills/skills/nix-ci`
-- Web frontend code (React, Vue, Svelte, raw HTML/CSS, or any UI-heavy artifact) → `anthropics/skills/skills/frontend-design`
-- `flake.nix` + web frontend code (any of the above frontend cues) → `juspay/nix-chrome-devtools-mcp` (so `/do`'s evidence step can capture UI screenshots in a PR comment)
-
-For each plausible candidate, use `AskUserQuestion` to confirm before adding. Offer:
-
-- "Add it" — append the entry to `dependencies.apm:` unpinned (no `#<ref>` — `apm install` will fetch the default branch).
-- "Skip" — don't add this one.
-- A free-form fallback so the user can pin a specific ref (`<dep>#<ref>`) or name another skill pack not listed above (e.g. a different `juspay/skills/skills/<name>`).
-
-If `dependencies.apm:` already contains an entry for a candidate (whether unpinned, `#master`, or some other ref), treat it as already wired in and skip the prompt for that entry. [Kolu's `apm.yml`](https://github.com/juspay/kolu/blob/master/apm.yml) is a worked example of `srid/agency` + several `juspay/skills` + `anthropics/skills/skills/frontend-design` layered together.
-
-## 4. Ensure `.gitignore` covers agency runtime artifacts
-
-`apm install` (which runs in step 8) will add `apm_modules/` for you, but `do` writes `.do-results.json` at the repo root during a workflow run and that should not be committed. Make sure both lines exist in `.gitignore` (create the file if missing), idempotently — don't duplicate entries that are already there:
-
-- `/.do-results.json`
-- `/apm_modules/` (verify; `apm install` may already have added it as `apm_modules/` — either form is fine)
-
-## 5. Intake pre-existing `AGENTS.md` / `CLAUDE.md`
-
-Migrate any hand-written agent instructions sitting at the repo root into `.apm/instructions/` before step 8 regenerates host configs. Otherwise:
-
-- A non-APM `AGENTS.md` is silently overwritten by `apm compile` in step 8 ([#132](https://github.com/srid/agency/issues/132)).
-- A hand-written `CLAUDE.md` won't be overwritten, but its content stays Claude-only — Codex and opencode never see it.
-
-### Detect
-
-Check `AGENTS.md` and `CLAUDE.md` at the repo root. Treat a file as **APM-generated** (and skip intake) if it contains the marker `<!-- Generated by APM CLI from distributed .apm/ primitives -->` near the top. Otherwise it qualifies.
-
-If neither file qualifies, skip this step.
-
-### Decide the migration shape
-
-Read each qualifying file and choose between migrating as one file or splitting it:
-
-- **Single coherent topic** (project-wide preamble, no clearly file-scoped sections) → migrate as one `.apm/instructions/conventions.instructions.md`.
-- **Monolithic with clearly scoped sections** (e.g. a section about frontend referencing `src/web/**`, another about Python rules referencing `*.py`) → propose a split where each scoped section becomes its own `.apm/instructions/<name>.instructions.md` with an inferred `applyTo` glob in frontmatter. Sections without an obvious file scope stay project-wide (omit `applyTo`).
-
-Surface the proposal via `AskUserQuestion`. Always include:
-
-- "Migrate as one file" — default for short or single-topic files.
-- "Split as proposed" — for each chunk show filename and `applyTo` glob in the question text, e.g. `frontend.instructions.md (applyTo: "src/web/**,*.tsx")`, `backend.instructions.md (applyTo: "src/api/**,*.py")`, `conventions.instructions.md (project-wide)`.
-- "Keep as-is, I'll handle it" — user accepts the consequences (overwrite for `AGENTS.md`, Claude-only for `CLAUDE.md`).
-- A free-form fallback so the user can rename files or adjust globs if your inference is off.
-
-If both `AGENTS.md` and `CLAUDE.md` qualify, ask whether to merge them into a shared set of instructions or keep them separate. Common case: they overlap, so a single merged migration is usually right.
-
-### Write the new files
-
-One file per migration target, with frontmatter:
-
-```markdown
----
-description: <inferred from heading or first sentence>
-applyTo: "<glob>"   # omit for project-wide
----
-
-<body, verbatim or section-extracted>
+```yaml
+tier:
+  subagent: flex
 ```
 
-Drop the original section heading from the body if it's now redundant with the description.
+## Configure project settings
 
-### Clean up the originals
-
-- **`AGENTS.md`** — `git rm` it. Step 8's `apm compile` will regenerate it from `.apm/` sources.
-- **`CLAUDE.md`** — leave in place for now. After step 8 runs, the same rules also land under `.claude/rules/`; the user can decide post-install whether to delete `CLAUDE.md` (or replace it with a thin entrypoint that imports `.claude/rules/*`). Surface this at report-back time (step 9).
-
-If the user picked "Keep as-is" for `AGENTS.md`, warn them at report-back time that step 8 has overwritten it.
-
-## 6. Apply pending migrations
-
-**Skip if this is a first-time setup** — `srid/agency` was not in `apm.yml` at the start of step 3, so there's nothing to migrate from.
-
-Otherwise, work through the registry below in order. **Each entry is idempotent** — re-running on an already-migrated repo is a no-op (the detection condition will simply fail). Apply only the entries whose detection condition is currently true.
-
-For each entry: announce to the user which migration is being applied and which files it touches, then perform the listed steps. Do **not** ask permission per entry — the user invoked this guide to refresh their install; that's authorization. Migrations only restructure files; they don't drop content.
-
-### #123 (simplify) — project config to `.agency/<skill>.md`
-
-**Detect**: any of these legacy paths exist:
-- `.apm/instructions/code-police-rules.instructions.md`
-- `.apm/instructions/hickey-catalog.instructions.md`
-- `.apm/instructions/lowy-volatilities.instructions.md`
-- `.apm/instructions/pr-evidence.instructions.md`
-- a `.apm/instructions/workflow.instructions.md` containing any of `## Check command`, `## Format command`, `## Test command`, `## CI command`, `## Documentation`
-
-**Migrate**:
-
-1. Create `.agency/` at the repo root.
-2. For each `.apm/instructions/<name>.instructions.md` extension file present, `git mv` it to its new location and **strip the YAML frontmatter** (delete everything from the first `---` to the second `---`, inclusive) from the moved file:
-   - `code-police-rules.instructions.md` → `.agency/code-police.md`
-   - `hickey-catalog.instructions.md` → `.agency/hickey.md`
-   - `lowy-volatilities.instructions.md` → `.agency/lowy.md`
-3. If `pr-evidence.instructions.md` was present, append its body (post-frontmatter) as a `## PR evidence` section to `.agency/do.md` (create the file if it doesn't exist yet — header `# /do config`, then the section). Delete the original file once content is moved.
-4. If `workflow.instructions.md` contains the `/do` command sections (`## Check command` etc., `## Documentation`), extract them into `.agency/do.md` (creating it if needed) and delete those sections from `workflow.instructions.md`.
-5. If `workflow.instructions.md` still has substantive content after the extraction (project-wide preamble, Git conventions, library notes, etc.), leave it alone — but its name no longer reflects its role. Suggest renaming to `conventions.instructions.md` at report-back time. If the file is empty or only has frontmatter after the extraction, `git rm` it.
-6. The stale `.claude/rules/` mirrors of the moved files will be cleaned up automatically by `apm install` in step 8.
-
-(Future migrations get appended below as new `### #<PR>` subsections.)
-
-## 7. Set up `.agency/`
-
-### Seed `.agency/README.md`
-
-Whether `.agency/` was just created in step 6's migration, gets created below for `do.md`, or already existed from an earlier run, make sure it carries a short pointer back to the agency site. Idempotent — if `.agency/README.md` already exists, leave it alone:
-
-```markdown
-# .agency/
-
-Project-specific config for [agency](https://agency.srid.ca/) skills.
-```
-
-### Draft `.agency/do.md`
-
-If this file already exists, **leave it alone** — the user has either already configured it or is intentionally hand-maintaining it. Skip to step 8.
-
-If it's missing (whether this is a first-time setup or an upgrade where the user added `srid/agency` to `apm.yml` themselves but never wrote a do config), create it now.
-
-`do` runs autonomously but needs to know your project's check, format, test, and CI commands. Inspect the project to figure them out — look at:
-
-- `package.json` `scripts:` (Node)
-- `justfile` (just)
-- `Makefile`
-- `Cargo.toml`, `flake.nix`, `pyproject.toml`
-- `.github/workflows/` for CI hints
-
-For each of the four command sections (Check, Format, Test, CI), there are three possible outcomes:
-
-- **Found a clear command** in the project → fill it in.
-- **Found a plausible command but you're not certain** → use `AskUserQuestion` to confirm. Offer the candidate as one option and "skip this section" as another, with a free-form fallback for the user to type a different command.
-- **Found nothing** → use `AskUserQuestion` to ask the user directly. Always include a "skip this section" option so they can explicitly discard it. Don't fabricate commands.
-
-Sections the user discards are **omitted from the generated file entirely** — no `# TODO` placeholders. `do` already handles missing sections by skipping the corresponding step with a note, which is the right behavior for a section the user has consciously declined.
-
-The same file also hosts an optional `## PR evidence` section that `/do`'s evidence step reads at runtime. Don't fill it in autonomously — it's project-specific and can't be inferred. Mention it at report-back time (step 9) so the user can add it later if they want PR-comment screenshots/benchmarks/etc. The section is free-form (inline prose, file pointer, script reference — all work).
-
-Final file uses this template, including only the command sections the user kept and leaving the optional `## PR evidence` section out (the user adds it manually if and when they want it):
+Create `.agency/do.md` at the repo root to configure `/do` for your project:
 
 ```markdown
 # /do config
 
 ## Check command
-<command>
+just check
 
 ## Format command
-<command>
+just fmt
 
 ## Test command
-<command>
+just test
 
 ## CI command
-<command>
+just ci
 
 ## Documentation
-Keep `README.md` in sync with user-facing changes.
-
-<!-- Optional (add manually for the evidence step):
-## PR evidence
--->
+Keep README.md in sync with user-facing changes.
 ```
 
-## 8. Refresh `srid/agency` (if already present), then run `apm install` (and `apm compile` for Codex / opencode)
-
-If `srid/agency` was already listed in `apm.yml` at the start of this run (you noted this in step 3), first run `<apm-invocation> deps update -t <subset> srid/agency` from the directory containing `apm.yml`, where `<subset>` is the same comma-separated list of targets you'll pass to `install` below. `apm install` alone won't move an already-installed dependency to a newer ref — `deps update` is what pulls the latest commit on the pinned ref. **Always pass `-t` explicitly** — even though `apm.yml` declares the targets, `deps update` (like `install` and `compile`) requires the flag. Skip this sub-step on first-time setup, where step 3 just added the entry; `apm install` will fetch it fresh.
-
-Then, regenerate the host configs in a single pass. Run `<apm-invocation> install -t <subset>` from the directory containing `apm.yml`, where `<subset>` is the comma-separated list of every target you declared in step 2 (e.g., `-t claude`, `-t codex,opencode`, or `-t claude,codex,opencode`). **Always pass `-t` explicitly** — even though `apm.yml` declares the targets, the install command requires the flag to know which host folders to generate. `apm` generates the runtime-specific folders (`.claude/` / `.opencode/` / `.codex/`), plus adds `apm_modules/` to `.gitignore`.
-
-**`install` does not generate the project-root `AGENTS.md` instruction file.** Codex and opencode read `AGENTS.md` at session start; without it they will not see any `.apm/instructions/` content (project-wide preamble, conventions, etc.). To produce it, also run:
-
-```sh
-<apm-invocation> compile -t <subset>
-```
-
-…where `<subset>` is the comma-separated list of `codex` and/or `opencode` from your declared targets (e.g., `-t codex,opencode` if both are declared, `-t codex` if only Codex). **Always pass `-t` explicitly** — like `install`, `compile` won't infer targets from `apm.yml`, so the flag is required. **Skip the compile step entirely if `claude` is the only target** — Claude Code reads `.claude/` natively and doesn't need `AGENTS.md` (compiling `CLAUDE.md` is intentionally avoided).
-
-If `install` or `compile` fails, surface the error verbatim and stop — don't paper over it.
-
-If you discover after this step that you still need to touch `apm.yml` or anything under `.apm/`, run `install` (and `compile` if applicable) again before moving on. The invariant at the top is non-negotiable.
-
-## 9. Report back
-
-Summarize for the user, in this order:
-
-1. Which `apm` invocation you used (so the user knows the exact command for ad-hoc `apm` calls later).
-2. Which target(s) ended up in `apm.yml` (and which form — `target:` scalar or `targets:` list), and which companion packages (if any) were added vs. skipped — list each `juspay/skills/skills/<name>` entry, `anthropics/skills/skills/frontend-design`, and `juspay/nix-chrome-devtools-mcp` the user accepted, plus the ones they declined.
-3. Which workflow sections were filled in (and from where) versus skipped at the user's request.
-4. **Intake** (if step 5 fired) — which root files (`AGENTS.md`, `CLAUDE.md`) were migrated, into which `.apm/instructions/` files (with `applyTo` globs if split), and any leftover originals (e.g. `CLAUDE.md` retained pending the user's decision). If the user picked "Keep as-is" for `AGENTS.md`, call out that step 8 has overwritten it.
-5. **Migrations applied** (if step 6 ran) — list each migration entry that fired and what it touched, so the user knows what restructuring happened in their tree. If a migration suggested a follow-up rename (e.g. `workflow.instructions.md` → `conventions.instructions.md`), surface that suggestion here.
-6. Files changed (staged, not committed). Tell them to review the diff before committing.
-7. **Optional `.agency/<name>.md` files to consider adding** — list whichever of these don't yet exist under `.agency/`, and explain briefly what each is for. They're project-specific and can't be auto-generated, but the user should know they exist so they can layer them on. Each file is plain Markdown — no frontmatter — and free-form (inline content or `See ./<path>` pointers all work).
-   - `.agency/code-police.md` — project-specific quality rules checked alongside the built-in `code-police` rules.
-   - `.agency/hickey.md` — project-specific complecting/fragmentation patterns extending the Hickey Layer 4 catalog.
-   - `.agency/lowy.md` — project-declared areas of volatility used by the Lowy review pass.
-   - `.agency/do.md` `## PR evidence` section (in the file you may have just written in step 7) — opts the project into `/do`'s `evidence` step, which posts an `## Evidence` PR comment with project-defined empirical artifacts (UI screenshots via chrome-devtools MCP, benchmark numbers, demo recordings, etc.).
-
-   Point them at [Kolu's `.agency/`](https://github.com/juspay/kolu/tree/master/.agency) as a worked example. Skip files/sections that already exist.
-8. **Restart the agent CLI** (Claude Code, Codex, opencode, etc.) so it picks up the newly generated skills — without a restart, the new skills won't be available in the running session.
-9. After restart, try `talk` or `do` to verify everything works. Tell the user the **exact** invocation syntax for the target(s) you installed for — don't make them guess:
-   - **Claude Code** → `/talk <question>` and `/do <task>` (slash commands).
-   - **Codex** → `$talk <question>` and `$do <task>` (dollar prefix).
-   - **opencode** → invoke `/skills` and pick `talk` or `do` from the list.
-
-   If you installed for multiple targets, list the syntax for each.
+See [Project config](../README.md#project-config) in the README for the full list of `.agency/` files.

@@ -4,9 +4,9 @@
 # Requires REPO_ROOT to be set before loading (the just recipe sets it;
 # if running bats by hand, set it manually:  REPO_ROOT=$(pwd) bats tests/).
 
-# Resolve the absolute path of a script-under-test by its .apm/-relative path.
-apm_script() {
-  echo "${REPO_ROOT:?}/.apm/$1"
+# Resolve the absolute path of a script-under-test by its repo-root-relative path.
+repo_script() {
+  echo "${REPO_ROOT:?}/$1"
 }
 
 # Create a temp working directory and cd into it.

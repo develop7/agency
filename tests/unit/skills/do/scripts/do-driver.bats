@@ -5,7 +5,7 @@
 setup() {
   load "$REPO_ROOT/tests/helpers/setup.bash"
   setup_test_dir
-  DO_DRIVER="$(apm_script skills/do/scripts/do-driver)"
+  DO_DRIVER="$(repo_script skills/do/scripts/do-driver)"
 }
 
 teardown() {
