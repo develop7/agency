@@ -7,14 +7,19 @@ on:
     branches: [master]
 
 jobs:
-  apm-sync:
-    name: APM sync check
+  test:
+    name: Tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: extractions/setup-just@v2
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - run: pip install uv
-      - run: just apm-sync
+      - run: sudo apt-get update && sudo apt-get install -y bats
+      - run: just test
+
+  lint:
+    name: Shellcheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: extractions/setup-just@v2
+      - run: just lint

@@ -1,6 +1,28 @@
-.worktrees/
-.do-results.json
+# Exclude everything
+*
 
-
-# APM dependencies
-apm_modules/
+# Except things we do care of
+!/skills/
+!/skills/**
+!/agents/
+!/agents/**
+!/scripts/
+!/scripts/**
+!/src/
+!/src/**
+!/.omp-plugin/
+!/.omp-plugin/**
+!/.agency/
+!/.agency/**
+!/docs/
+!/docs/**
+!/tests/
+!/tests/**
+!/website/
+!/website/**
+!/.github/
+!/.github/**
+!/package.json
+!/justfile
+!/LICENSE
+!/README.md
